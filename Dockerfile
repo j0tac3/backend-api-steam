@@ -35,4 +35,5 @@ RUN chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 EXPOSE 80
 
-php artisan migrate --force && php artisan serve --host 0.0.0.0 --port 10000
+# Al final de tu Dockerfile, después del EXPOSE 80
+CMD php artisan migrate --force && apache2-foreground
