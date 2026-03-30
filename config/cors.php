@@ -14,18 +14,13 @@ return [
     | To learn more: https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS
     |
     */
-    // 1. Asegúrate de que incluya 'api/*'
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
-    // 2. Permitir todos los métodos (GET, POST, PUT, DELETE)
-    'allowed_methods' => ['*'],
-    // 3. ¡IMPORTANTE! Para desarrollo, pon '*'
-    // Cuando subas Angular a Vercel, cambiaremos esto por la URL de Vercel
-    'allowed_origins' => ['*'],
-    'allowed_origins_patterns' => [],
-    // 4. Permitir todos los headers
-    'allowed_headers' => ['*'],
-    'exposed_headers' => [],
-    'max_age' => 0,
-    'supports_credentials' => false,
-
-];
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'login', 'logout'], // Añadimos login y logout por si acaso
+        'allowed_methods' => ['*'],
+        // NO USES '*', pon la URL exacta de tu localhost
+        'allowed_origins' => ['http://localhost:4200'], 
+        'allowed_origins_patterns' => [],
+        'allowed_headers' => ['*'],
+        'exposed_headers' => [],
+        'max_age' => 0,
+        'supports_credentials' => true, // ESTO TIENE QUE SER TRUE
+    ];
