@@ -17,6 +17,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/games', [GameController::class, 'index']);
     Route::post('/games', [GameController::class, 'store']);
+    Route::put('/games/{id}', [GameController::class, 'update']);
     Route::delete('/games/{id}', [GameController::class, 'destroy']);
     Route::get('/steam/search', [GameController::class, 'search']);
     Route::get('/steam/details/{id}', [GameController::class, 'getSteamDetails']);
