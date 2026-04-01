@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\GameController; // <-- Fíjate: Api
 use App\Http\Controllers\Api\AuthController; // <-- Fíjate: Api
+use Illuminate\Support\Facades\Artisan;
 
 // --- RUTAS PÚBLICAS (Sin Token) ---
 Route::post('/register', [AuthController::class, 'register']);
@@ -23,4 +24,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/steam/details/{id}', [GameController::class, 'getSteamDetails']);
 
     Route::post('/logout', [AuthController::class, 'logout']);
+});
+
+Route::get('/arreglar-bd', function () {
+    try {
+        // Esto obliga a Laravel a ejecutar las migraciones pendientes
+        Artisan::call('migrate', ['--force' => true]);
+        return response()->json([
+            'mensaje' => '¡Base de datos actualizada con éxito!',
+            'detalles' => Artisan::output()
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => 'Algo falló',
+            'mensaje' => $e->getMessage()
+        ], 500);
+    }
 });
