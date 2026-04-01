@@ -30,4 +30,12 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    // app/Models/User.php
+
+    public function games()
+    {
+        // Esto le dice a Laravel que un usuario tiene muchos juegos
+        return $this->hasMany(\App\Models\Game::class);
+    }
 }
