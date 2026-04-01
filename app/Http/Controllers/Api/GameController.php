@@ -11,9 +11,9 @@ use Illuminate\Support\Facades\Log;
 class GameController extends Controller
 {
     // --- 1. Obtener mi biblioteca ---
-    public function index()
-    {
-        return response()->json(Game::orderBy('created_at', 'desc')->get());
+   public function index(Request $request) {
+    // Esto solo trae los juegos que pertenecen al usuario del Token actual
+        return $request->user()->games()->get();
     }
 
     // --- 2. Guardar un juego ---
