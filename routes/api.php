@@ -21,4 +21,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/games/{id}', [GameController::class, 'destroy']);
     Route::get('/steam/search', [GameController::class, 'search']);
     Route::get('/steam/details/{id}', [GameController::class, 'getSteamDetails']);
+
+    Route::post('/logout', [AuthController::class, 'logout']);
 });
