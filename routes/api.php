@@ -26,17 +26,25 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 });
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
 Route::get('/arreglar-bd', function () {
     try {
-        // Esto obliga a Laravel a ejecutar las migraciones pendientes
-        Artisan::call('migrate', ['--force' => true]);
+        // 1. Intentamos borrar la restricción única del AppID por SQL puro
+        // El nombre suele ser 'games_steam_appid_unique'
+        DB::statement('ALTER TABLE games DROP CONSTRAINT IF EXISTS games_steam_appid_unique');
+
+        // 2. Opcional: Borramos también el índice si existe
+        DB::statement('DROP INDEX IF EXISTS games_steam_appid_unique');
+
         return response()->json([
-            'mensaje' => '¡Base de datos actualizada con éxito!',
-            'detalles' => Artisan::output()
+            'mensaje' => '¡Restricción eliminada con éxito!',
+            'info' => 'Ahora la base de datos debería permitir el mismo juego para distintos usuarios.'
         ]);
     } catch (\Exception $e) {
         return response()->json([
-            'error' => 'Algo falló',
+            'error' => 'Error al ejecutar SQL',
             'mensaje' => $e->getMessage()
         ], 500);
     }
