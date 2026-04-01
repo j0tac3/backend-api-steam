@@ -25,24 +25,21 @@ class GameController extends Controller
             'image_url' => 'nullable|string',
         ]);
 
-        // 1. IMPORTANTE: Buscamos si EL USUARIO ya tiene ese juego
-        // No buscamos en toda la tabla, solo en los juegos del usuario autenticado
+        // OPCIONAL: Verificar si ya existe para ESTE usuario (para no duplicar)
         $existe = $request->user()->games()
                                 ->where('steam_appid', $validated['steam_appid'])
                                 ->first();
-
         if ($existe) {
-            return response()->json(['message' => 'Ya tienes este juego en tu biblioteca'], 422);
+            return response()->json(['message' => 'El juego ya está en tu biblioteca'], 422);
         }
 
-        // 2. CREAR vinculando al usuario
-        // Al usar $request->user()->games()->create(...), Laravel 
-        // rellena automáticamente el campo user_id por ti.
+        // LA CLAVE ESTÁ AQUÍ:
+        // En lugar de Game::create, usamos la relación del usuario autenticado
         $game = $request->user()->games()->create([
-            'title' => $validated['title'],
+            'title'       => $validated['title'],
             'steam_appid' => $validated['steam_appid'],
-            'image_url' => $validated['image_url'],
-            'status' => 'pendiente'
+            'image_url'   => $validated['image_url'],
+            'status'      => 'pendiente'
         ]);
 
         return response()->json($game, 201);
