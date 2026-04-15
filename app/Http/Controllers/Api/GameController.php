@@ -23,6 +23,8 @@ class GameController extends Controller
             'title' => 'required|string',
             'steam_appid' => 'required|string',
             'image_url' => 'nullable|string',
+            'status' => 'required|string',
+            'source' => 'required|string'
         ]);
 
         // OPCIONAL: Verificar si ya existe para ESTE usuario (para no duplicar)
@@ -39,7 +41,8 @@ class GameController extends Controller
             'title'       => $validated['title'],
             'steam_appid' => $validated['steam_appid'],
             'image_url'   => $validated['image_url'],
-            'status'      => 'pendiente'
+            'status'      => 'pendiente',
+            'source'      => $validated['source'],
         ]);
 
         return response()->json($game, 201);
@@ -102,7 +105,7 @@ class GameController extends Controller
             return response()->json(['message' => 'Juego no encontrado'], 404);
         }
         $validated = $request->validate([
-            'status' => 'required|string|in:pendiente,jugando,completado'
+            'status' => 'required|string|in:pendiente,jugando,completado,abandonado'
         ]);
         $game->update(['status' => $validated['status']]);
         return response()->json($game);
@@ -127,5 +130,34 @@ class GameController extends Controller
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    public function updateDiario(Request $request, $id) 
+    {
+        // Buscamos el juego por el steam_appid (que es el 7102 que llega de Angular)
+        $game = Game::where('steam_appid', $id)
+                    ->orWhere('id', $id) // Por si acaso alguna vez mandas el ID interno
+                    ->first();
+
+        if (!$game) {
+            return response()->json([
+                'status' => 'error',
+                'message' => "No se encontró el juego con ID: $id en la base de datos."
+            ], 404);
+        }
+
+        // Actualizamos los campos
+        $game->update([
+            'notes'           => $request->notes,
+            'personal_rating' => $request->personal_rating,
+            'start_date'      => $request->start_date,
+            'end_date'        => $request->end_date,
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Diario actualizado correctamente',
+            'game' => $game
+        ]);
     }
 }
