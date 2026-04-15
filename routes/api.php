@@ -59,7 +59,7 @@ Route::get('/arreglar-bd', function () {
 
 
 // ... tus otras rutas ...
-
+/* 
 Route::get('/ejecutar-migracion-sistema', function () {
     try {
         // Ejecuta php artisan migrate --force
@@ -69,4 +69,4 @@ Route::get('/ejecutar-migracion-sistema', function () {
     } catch (\Exception $e) {
         return "❌ Error al migrar: " . $e->getMessage();
     }
-});
+}); */
