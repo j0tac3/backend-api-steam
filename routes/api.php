@@ -31,3 +31,16 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
 });
+
+
+// ⚠️ RUTA TEMPORAL PARA MIGRAR EN PRODUCCIÓN
+Route::get('/run-migrations-secret-123', function () {
+    try {
+        // El --force es obligatorio en producción, si no Laravel se niega a migrar
+        Artisan::call('migrate', ['--force' => true]); 
+        
+        return "<h1>¡Éxito!</h1><pre>" . Artisan::output() . "</pre>";
+    } catch (\Exception $e) {
+        return "<h1>Error:</h1><p>" . $e->getMessage() . "</p>";
+    }
+});
