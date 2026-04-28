@@ -15,6 +15,7 @@ class Game extends Model
     'user_id',
     'notes',            // 👈 ¡Asegúrate de que estos están aquí!
     'personal_rating',
-    'start_date'
+    'start_date',
+    'platform'
 ];
 }

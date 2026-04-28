@@ -24,7 +24,8 @@ class GameController extends Controller
             'steam_appid' => 'required|string',
             'image_url' => 'nullable|string',
             'status' => 'required|string',
-            'source' => 'required|string'
+            'source' => 'required|string',
+            'platform' => 'nullable|string|max:50',
         ]);
 
         // OPCIONAL: Verificar si ya existe para ESTE usuario (para no duplicar)
@@ -43,6 +44,7 @@ class GameController extends Controller
             'image_url'   => $validated['image_url'],
             'status'      => 'pendiente',
             'source'      => $validated['source'],
+            'platform' => 'nullable|string|max:50',
         ]);
 
         return response()->json($game, 201);
@@ -152,6 +154,7 @@ class GameController extends Controller
             'personal_rating' => $request->personal_rating,
             'start_date'      => $request->start_date,
             'end_date'        => $request->end_date,
+            'platform'        => $request->platform,
         ]);
 
         return response()->json([
