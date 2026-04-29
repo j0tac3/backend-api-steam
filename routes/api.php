@@ -5,11 +5,15 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\GameSearchController; 
 use App\Http\Controllers\Api\GameController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\RadarController;
 use Illuminate\Support\Facades\Artisan;
 
 // --- RUTAS PÚBLICAS (Sin Token) ---
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+
+Route::get('/radar/ofertas', [RadarController::class, 'getSteamDeals']);
+
 
 // --- RUTAS PRIVADAS (Requieren Token) ---
 Route::middleware('auth:sanctum')->group(function () {
