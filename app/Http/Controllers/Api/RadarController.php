@@ -11,19 +11,29 @@ class RadarController extends Controller
     public function getSteamDeals(Request $request)
     {
         try {
-            $response = Http::get('https://www.cheapshark.com/api/1.0/deals', [
-                'storeID' => 1,
-                'sortBy'  => 'Savings', // 🚀 Cambiamos a 'Savings' para que los de 100% salgan primero
-                'pageSize' => 15,       // Aumentamos a 15 para tener más margen
-                'onSale'  => 1
-            ]);
+            // Añadimos timeout y desactivamos verificación SSL temporalmente para probar
+            $response = Http::timeout(15) // No esperes más de 15 seg
+                ->withoutVerifying()      // 🚀 ESTO suele arreglar el 502 en hosting compartido/Render
+                ->get('https://www.cheapshark.com/api/1.0/deals', [
+                    'storeID' => 1,
+                    'sortBy'  => 'Savings',
+                    'pageSize' => 15,
+                    'onSale'  => 1
+                ]);
 
             if ($response->successful()) {
                 return response()->json($response->json());
             }
-            return response()->json(['error' => 'Error de conexión'], 502);
+
+            // Si la API externa falla, devolvemos el error exacto para debugear
+            return response()->json([
+                'error' => 'CheapShark respondió con error',
+                'status' => $response->status()
+            ], 502);
+
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            // Esto saldrá en tus logs de Render
+            return response()->json(['error' => 'Error de conexión en el servidor: ' . $e->getMessage()], 500);
         }
     }
 
