@@ -14,7 +14,6 @@ Route::post('/login', [AuthController::class, 'login']);
 
 Route::get('/radar/ofertas', [RadarController::class, 'getSteamDeals']);
 
-
 // --- RUTAS PRIVADAS (Requieren Token) ---
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {

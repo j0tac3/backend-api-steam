@@ -8,6 +8,25 @@ use Illuminate\Support\Facades\Http;
 
 class RadarController extends Controller
 {
+    public function getSteamDeals(Request $request)
+    {
+        try {
+            $response = Http::get('https://www.cheapshark.com/api/1.0/deals', [
+                'storeID' => 1,
+                'sortBy'  => 'Savings', // 🚀 Cambiamos a 'Savings' para que los de 100% salgan primero
+                'pageSize' => 15,       // Aumentamos a 15 para tener más margen
+                'onSale'  => 1
+            ]);
+
+            if ($response->successful()) {
+                return response()->json($response->json());
+            }
+            return response()->json(['error' => 'Error de conexión'], 502);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
     /* public function getSteamDeals(Request $request)
     {
         try {
@@ -30,23 +49,4 @@ class RadarController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     } */
-
-    public function getSteamDeals(Request $request)
-    {
-        try {
-            $response = Http::get('https://www.cheapshark.com/api/1.0/deals', [
-                'storeID' => 1,
-                'sortBy'  => 'Savings', // 🚀 Cambiamos a 'Savings' para que los de 100% salgan primero
-                'pageSize' => 15,       // Aumentamos a 15 para tener más margen
-                'onSale'  => 1
-            ]);
-
-            if ($response->successful()) {
-                return response()->json($response->json());
-            }
-            return response()->json(['error' => 'Error de conexión'], 502);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
-    }
 }
