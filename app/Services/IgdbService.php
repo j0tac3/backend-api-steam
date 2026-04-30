@@ -56,48 +56,43 @@ class IgdbService
      * Obtener los detalles completos de un juego por su ID en IGDB
      */
     public function getGameDetails($id)
-    {
-        // Creamos una llave única para este juego en la caché (ej: "igdb_game_9727")
-        $cacheKey = 'igdb_game_' . $id;
+{
+    $cacheKey = 'igdb_game_' . $id;
 
-        // rememberForever guardará este JSON traducido para siempre (ahorrando recursos)
-        return Cache::rememberForever($cacheKey, function () use ($id) {
+    return Cache::rememberForever($cacheKey, function () use ($id) {
+        // 🚀 1. Obtenemos el token dinámico (evita errores en producción)
+        $token = $this->getAccessToken(); 
 
-            // 1. La Mega Consulta a IGDB
-            $query = "fields name, summary, storyline, first_release_date, rating, rating_count, aggregated_rating, aggregated_rating_count, cover.image_id, screenshots.image_id, artworks.image_id, videos.name, videos.video_id, genres.name, themes.name, game_modes.name, player_perspectives.name, platforms.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, websites.category, websites.url, similar_games.name, dlcs.name, expansions.name; where id = {$id}; limit 1;";
+        // 🚀 2. La consulta COMPLETA (sin los puntos suspensivos)
+        $query = "fields name, summary, storyline, first_release_date, rating, rating_count, aggregated_rating, aggregated_rating_count, cover.image_id, screenshots.image_id, artworks.image_id, videos.name, videos.video_id, genres.name, themes.name, game_modes.name, player_perspectives.name, platforms.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, websites.category, websites.url, similar_games.name, dlcs.name, expansions.name; where id = {$id}; limit 1;";
 
-            $response = Http::withHeaders([
-                // Ajusta estos headers con tus variables de entorno para Twitch/IGDB
-                'Client-ID' => env('IGDB_CLIENT_ID'),
-                'Authorization' => 'Bearer ' . env('IGDB_ACCESS_TOKEN'),
-            ])->withBody($query, 'text/plain')
-              ->post('https://api.igdb.com/v4/games');
+        $response = Http::withHeaders([
+            'Client-ID'     => $this->clientId,
+            'Authorization' => 'Bearer ' . $token,
+        ])->withBody($query, 'text/plain')
+          ->post('https://api.igdb.com/v4/games');
 
-            $data = $response->json();
+        $data = $response->json();
 
-            // Si IGDB no devuelve nada, cortamos aquí
-            if (empty($data)) {
-                return null;
-            }
+        // 🚀 3. Verificamos si la API devolvió un error (como el 400 de tu captura)
+        if (empty($data) || isset($data['status'])) {
+            return null;
+        }
 
-            // IGDB siempre devuelve un array, cogemos el primer (y único) resultado
-            $game = $data[0];
+        $game = $data[0];
 
-            // 2. Traducción Quirúrgica (Solo traducimos lo literario)
-            if (isset($game['summary'])) {
-                $game['summary'] = $this->translator->translateToSpanish($game['summary']);
-            }
+        // 4. Traducción
+        if (isset($game['summary'])) {
+            $game['summary'] = $this->translator->translateToSpanish($game['summary']);
+        }
 
-            if (isset($game['storyline'])) {
-                $game['storyline'] = $this->translator->translateToSpanish($game['storyline']);
-            }
+        if (isset($game['storyline'])) {
+            $game['storyline'] = $this->translator->translateToSpanish($game['storyline']);
+        }
 
-            // Opcional: También podríamos traducir 'genres' y 'themes' aquí si lo deseas
-
-            // 3. Devolvemos el juego cocinado. Al hacer return, Laravel lo guarda en caché automáticamente.
-            return $game;
-        });
-    }
+        return $game;
+    });
+}
 
     public function buscarJuegosAvanzado($nombre)
     {
