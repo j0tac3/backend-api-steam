@@ -163,4 +163,24 @@ class GameController extends Controller
             'game' => $game
         ]);
     }
+
+    public function toggleFavorite(Request $request, $id)
+    {
+        try {
+            // Buscamos el juego asegurándonos de que pertenezca al usuario logueado
+            $game = Game::where('id', $id)->where('user_id', auth()->id())->firstOrFail();
+
+            // Magia pura: Invertimos el valor actual (Si era true, pasa a false y viceversa)
+            $game->is_favorite = !$game->is_favorite;
+            $game->save();
+
+            return response()->json([
+                'message' => 'Estado de favorito actualizado',
+                'is_favorite' => $game->is_favorite
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'No se pudo actualizar el favorito'], 500);
+        }
+    }
 }
