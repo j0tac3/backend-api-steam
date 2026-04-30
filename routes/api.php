@@ -24,13 +24,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/games', [GameController::class, 'store']);
     Route::put('/games/{id}', [GameController::class, 'update']);
     Route::delete('/games/{id}', [GameController::class, 'destroy']);
+    Route::patch('/games/{id}/diario', [GameController::class, 'updateDiario']);
+    Route::patch('/games/{id}/favorite', [GameController::class, 'toggleFavorite']);
+
     Route::get('/steam/search', [GameController::class, 'search']);
     Route::get('/steam/details/{id}', [GameController::class, 'getSteamDetails']);
 
     Route::get('/search-igdb', [GameSearchController::class, 'search']);
     Route::get('/igdb-details/{id}', [GameSearchController::class, 'getIgdbDetails']);
     Route::get('/igdb/buscar', [GameSearchController::class, 'buscarEnIgdb']);
-    Route::patch('/games/{id}/diario', [GameController::class, 'updateDiario']);
+
+    Route::get('/buscar-en-igdb', [GameSearchController::class, 'buscarEnIGDB']);
+    Route::get('/igdb-details/{id}', [GameSearchController::class, 'getIgdbDetails']);
 
     Route::post('/logout', [AuthController::class, 'logout']);
 });
