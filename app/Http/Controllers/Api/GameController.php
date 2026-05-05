@@ -5,182 +5,213 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Game;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
+use App\Services\IgdbService;
+use App\Services\TranslationService;
 
 class GameController extends Controller
 {
-    // --- 1. Obtener mi biblioteca ---
-   public function index(Request $request) {
-    // Esto solo trae los juegos que pertenecen al usuario del Token actual
-        return $request->user()->games()->get();
+    protected $igdbService;
+    protected $translator; // 🚀 Añadimos la propiedad
+
+    // 🚀 2. Inyectamos también el TranslationService
+    public function __construct(IgdbService $igdbService, TranslationService $translator)
+    {
+        $this->igdbService = $igdbService;
+        $this->translator = $translator;
     }
 
-    // --- 2. Guardar un juego ---
-   public function store(Request $request)
+    // --- 1. Obtener la biblioteca del usuario logueado ---
+    public function index(Request $request) 
+    {
+        return $request->user()->games()
+                               ->orderBy('created_at', 'desc')
+                               ->get();
+    }
+
+    // --- 2. Guardar un juego (Desde la "Aduana") ---
+    public function store(Request $request)
     {
         $validated = $request->validate([
-            'title' => 'required|string',
-            'steam_appid' => 'required|string',
-            'image_url' => 'nullable|string',
-            'status' => 'required|string',
-            'source' => 'required|string',
-            'platform' => 'nullable|string|max:50',
+            'external_id' => 'required|string',
+            'source'      => 'required|string|in:igdb,steam',
+            'title'       => 'required|string',
+            'cover_url'   => 'nullable|string',
+            'status'      => 'required|string|in:pendiente,jugando,completado,abandonado',
         ]);
 
-        // OPCIONAL: Verificar si ya existe para ESTE usuario (para no duplicar)
         $existe = $request->user()->games()
-                                ->where('steam_appid', $validated['steam_appid'])
-                                ->first();
+                                  ->where('external_id', $validated['external_id'])
+                                  ->where('source', $validated['source'])
+                                  ->first();
+
         if ($existe) {
-            return response()->json(['message' => 'El juego ya está en tu biblioteca'], 422);
+            return response()->json(['message' => 'El juego ya está en tu colección'], 422);
         }
 
-        // LA CLAVE ESTÁ AQUÍ:
-        // En lugar de Game::create, usamos la relación del usuario autenticado
         $game = $request->user()->games()->create([
-            'title'       => $validated['title'],
-            'steam_appid' => $validated['steam_appid'],
-            'image_url'   => $validated['image_url'],
-            'status'      => 'pendiente',
+            'external_id' => $validated['external_id'],
             'source'      => $validated['source'],
-            'platform' => 'nullable|string|max:50',
+            'title'       => $validated['title'],
+            'cover_url'   => $validated['cover_url'],
+            'status'      => $validated['status'],
         ]);
 
         return response()->json($game, 201);
     }
 
-    // --- 3. Buscador Proxy de Steam ---
+    // En app/Http/Controllers/GameController.php
+    public function update(Request $request, $id)
+    {
+        // 1. Buscamos el juego en la base de datos que pertenezca al usuario autenticado
+        $game = \App\Models\Game::where('user_id', auth()->id())->findOrFail($id);
+
+        // 2. Validamos los datos que nos manda Angular desde el Modal V2
+        $validatedData = $request->validate([
+            'platform' => 'nullable|string',
+            'status' => 'required|string|in:pendiente,jugando,completado,abandonado',
+            // Puedes añadir más campos aquí si en el futuro permites editar nota, etc.
+        ]);
+
+        // 3. Actualizamos y guardamos
+        $game->update($validatedData);
+
+        // 4. Devolvemos el juego actualizado
+        return response()->json($game);
+    }
+
+    // --- 3. Actualizar el Estado (Para el Kanban/Tablero) ---
+    public function updateStatus(Request $request, $id)
+    {
+        $game = $request->user()->games()->findOrFail($id);
+
+        $validated = $request->validate([
+            'status' => 'required|string|in:pendiente,jugando,completado,abandonado'
+        ]);
+
+        $game->update(['status' => $validated['status']]);
+
+        return response()->json($game);
+    }
+
+    // --- 4. Actualizar el Diario (Desde el Modal de detalles) ---
+    public function updateDiario(Request $request, $id) 
+    {
+        $game = $request->user()->games()->findOrFail($id);
+
+        $game->update([
+            'notes'           => $request->notes,
+            'personal_rating' => $request->personal_rating,
+            'start_date'      => $request->start_date,
+            'platform'        => $request->platform,
+        ]);
+
+        return response()->json([
+            'message' => 'Diario actualizado correctamente',
+            'game'    => $game
+        ]);
+    }
+
+    // --- 5. Alternar Favorito ---
+    public function toggleFavorite(Request $request, $id)
+    {
+        $game = $request->user()->games()->findOrFail($id);
+        $game->is_favorite = !$game->is_favorite;
+        $game->save();
+
+        return response()->json([
+            'message'     => 'Favorito actualizado',
+            'is_favorite' => $game->is_favorite
+        ]);
+    }
+
+    // --- 6. Eliminar Juego ---
+    public function destroy(Request $request, $id)
+    {
+        $game = $request->user()->games()->findOrFail($id);
+        $game->delete();
+        return response()->json(['message' => 'Juego eliminado de la colección']);
+    }
+
+    // --- 7. Buscador Centralizado ---
     public function search(Request $request)
     {
         $query = $request->query('q');
         if (!$query) {
             return response()->json([]);
         }
-        try {
-            // Usamos la API de búsqueda de la tienda de Steam (es mucho más ligera)
-            $response = Http::withoutVerifying()
-                ->timeout(5)
-                ->get("https://store.steampowered.com/api/storesearch/", [
-                    'term' => $query,
-                    'l'    => 'spanish',
-                    'cc'   => 'ES'
-                ]);
-            if ($response->successful()) {
-                $data = $response->json();
-                // Mapeamos los resultados para que coincidan con lo que espera tu Angular
-                $juegos = collect($data['items'] ?? [])->map(function($item) {
-                    return [
-                        'appid' => (string) $item['id'], // Steam Store usa 'id'
-                        'name'  => $item['name'],
-                        'logo'  => $item['tiny_image']  // Ya nos da la miniatura directamente
-                    ];
-                });
-                return response()->json($juegos);
+
+        $rawGames = $this->igdbService->searchGames($query);
+
+        if (!is_array($rawGames) || isset($rawGames['message'])) {
+            return response()->json([]);
+        }
+
+        $cleanGames = collect($rawGames)->map(function ($game) {
+            $coverUrl = null;
+            if (isset($game['cover']['url'])) {
+                $coverUrl = str_replace('t_thumb', 't_cover_big', $game['cover']['url']);
+                $coverUrl = 'https:' . $coverUrl;
             }
-            return response()->json(['error' => 'Steam Store no responde'], 502);
-        } catch (\Exception $e) {
-            // Si hay un error de conexión real, lo vemos aquí
-            return response()->json([
-                'error' => 'Fallo de red local',
-                'debug' => $e->getMessage()
-            ], 500);
-        }
+            return [
+                'external_id' => (string) $game['id'],
+                'title'       => $game['name'],
+                'cover_url'   => $coverUrl,
+                'source'      => 'igdb',
+            ];
+        });
+
+        return response()->json($cleanGames);
     }
 
-    // app/Http/Controllers/Api/GameController.php
-    public function destroy($id)
+    // --- E. DETALLES COMPLETOS (Para el Modal V2) ---
+    public function getDetails(Request $request, $id)
     {
-        $game = Game::find($id);
-        if (!$game) {
-            return response()->json(['message' => 'Juego no encontrado'], 404);
-        }
-        $game->delete();
-        return response()->json(['message' => 'Juego eliminado correctamente']);
-    }
+        $source = $request->query('source', 'igdb');
 
-    // app/Http/Controllers/Api/GameController.php
-    public function update(Request $request, $id)
-    {
-        $game = Game::find($id);
-        if (!$game) {
-            return response()->json(['message' => 'Juego no encontrado'], 404);
-        }
-        $validated = $request->validate([
-            'status' => 'required|string|in:pendiente,jugando,completado,abandonado'
-        ]);
-        $game->update(['status' => $validated['status']]);
-        return response()->json($game);
-    }
+        if ($source === 'igdb') {
+            $response = $this->igdbService->getGameDetails($id);
 
-    // app/Http/Controllers/Api/GameController.php
+            // 🚀 IGDB siempre devuelve un array. Sacamos el primer elemento [0]
+            $rawDetails = is_array($response) && count($response) > 0 ? $response[0] : null;
 
-    public function getSteamDetails($appid)
-    {
-        try {
-            $response = Http::withoutVerifying()
-                ->get("https://store.steampowered.com/api/appdetails", [
-                    'appids' => $appid,
-                    'l' => 'spanish' // Queremos la descripción en español
-                ]);
-
-            if ($response->successful() && isset($response->json()[$appid]['data'])) {
-                return response()->json($response->json()[$appid]['data']);
+            if (!$rawDetails) {
+                return response()->json(['message' => 'Juego no encontrado en IGDB'], 404);
             }
 
-            return response()->json(['error' => 'No se encontraron detalles'], 404);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            // 🚀 Mapeo corregido con las variables exactas de IGDB
+            $mappedDetails = [
+                'id' => $rawDetails['id'] ?? $id,
+                'name' => $rawDetails['name'] ?? 'Desconocido',
+                
+                'coverUrl' => isset($rawDetails['cover']['image_id']) 
+                    ? 'https://images.igdb.com/igdb/image/upload/t_cover_big/' . $rawDetails['cover']['image_id'] . '.jpg'
+                    : null,
+                    
+                'releaseDate' => $rawDetails['first_release_date'] ?? null,
+                
+                // 🚀 3. Traducimos el texto antes de mandarlo a Angular
+                'summary' => isset($rawDetails['summary']) 
+                    ? $this->translator->translateToSpanish($rawDetails['summary']) 
+                    : null,
+                
+                'criticScore' => isset($rawDetails['aggregated_rating']) ? round($rawDetails['aggregated_rating']) : null,
+                
+                'userScore' => isset($rawDetails['rating']) ? round($rawDetails['rating']) : null,
+                'userScoreCount' => $rawDetails['rating_count'] ?? null,
+                
+                'genres' => collect($rawDetails['genres'] ?? [])->pluck('name')->toArray(),
+                'platforms' => collect($rawDetails['platforms'] ?? [])->pluck('name')->toArray(),
+                'involvedCompanies' => collect($rawDetails['involved_companies'] ?? [])->pluck('company.name')->toArray(),
+                'gameModes' => collect($rawDetails['game_modes'] ?? [])->pluck('name')->toArray(),
+                
+                'screenshots' => collect($rawDetails['screenshots'] ?? [])->map(function($shot) {
+                    return 'https://images.igdb.com/igdb/image/upload/t_screenshot_med/' . $shot['image_id'] . '.jpg';
+                })->toArray(),
+            ];
+
+            return response()->json($mappedDetails);
         }
-    }
 
-    public function updateDiario(Request $request, $id) 
-    {
-        // Buscamos el juego por el steam_appid (que es el 7102 que llega de Angular)
-        $game = Game::where('steam_appid', $id)
-                    ->orWhere('id', $id) // Por si acaso alguna vez mandas el ID interno
-                    ->first();
-
-        if (!$game) {
-            return response()->json([
-                'status' => 'error',
-                'message' => "No se encontró el juego con ID: $id en la base de datos."
-            ], 404);
-        }
-
-        // Actualizamos los campos
-        $game->update([
-            'notes'           => $request->notes,
-            'personal_rating' => $request->personal_rating,
-            'start_date'      => $request->start_date,
-            'end_date'        => $request->end_date,
-            'platform'        => $request->platform,
-        ]);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Diario actualizado correctamente',
-            'game' => $game
-        ]);
-    }
-
-    public function toggleFavorite(Request $request, $id)
-    {
-        try {
-            // Buscamos el juego asegurándonos de que pertenezca al usuario logueado
-            $game = Game::where('id', $id)->where('user_id', auth()->id())->firstOrFail();
-
-            // Magia pura: Invertimos el valor actual (Si era true, pasa a false y viceversa)
-            $game->is_favorite = !$game->is_favorite;
-            $game->save();
-
-            return response()->json([
-                'message' => 'Estado de favorito actualizado',
-                'is_favorite' => $game->is_favorite
-            ], 200);
-
-        } catch (\Exception $e) {
-            return response()->json(['error' => 'No se pudo actualizar el favorito'], 500);
-        }
+        return response()->json(['message' => 'Fuente no soportada'], 404);
     }
 }

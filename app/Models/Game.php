@@ -7,15 +7,22 @@ use Illuminate\Database\Eloquent\Model;
 class Game extends Model
 {
     protected $fillable = [
-    'title', 
-    'steam_appid', 
-    'image_url', 
-    'status', 
-    'source', // <--- AGREGAR ESTO
-    'user_id',
-    'notes',            // 👈 ¡Asegúrate de que estos están aquí!
-    'personal_rating',
-    'start_date',
-    'platform'
-];
+        'user_id',
+        'external_id',
+        'source',
+        'title',
+        'cover_url',
+        'status',
+        'notes',
+        'personal_rating',
+        'start_date',
+        'platform',
+        'is_favorite'
+    ];
+
+    // Relación con el usuario
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 }
