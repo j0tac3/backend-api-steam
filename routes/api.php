@@ -63,3 +63,23 @@ Route::get('/reset-db', function () {
         ], 500);
     }
 });
+
+Route::get('/limpiar-todo', function () {
+    try {
+        Artisan::call('route:clear');
+        Artisan::call('config:clear');
+        Artisan::call('cache:clear');
+        Artisan::call('view:clear');
+        Artisan::call('optimize:clear');
+        
+        return response()->json([
+            'success' => true,
+            'message' => '¡Toda la caché del servidor ha sido purgada con éxito!'
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
+    }
+});
