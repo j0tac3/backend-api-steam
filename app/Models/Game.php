@@ -20,14 +20,14 @@ class Game extends Model
         'is_favorite'
     ];
 
+    protected $casts = [
+    'is_favorite' => 'boolean',
+        ];
+
     // Relación con el usuario
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-    protected $casts = [
-        'is_favorite' => 'boolean',
-        'personal_rating' => 'integer',
-    ];
 }
