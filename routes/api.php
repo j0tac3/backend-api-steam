@@ -40,19 +40,3 @@ Route::middleware('auth:sanctum')->group(function () {
     // Logout
     Route::post('/logout', [AuthController::class, 'logout']);
 });
-
-Route::get('/run-migrations-secret-url', function () {
-    try {
-        // 🚀 CAMBIAMOS 'migrate' POR 'migrate:fresh'
-        // ESTO BORRARÁ TODA LA BASE DE DATOS Y LA RECREARÁ
-        Artisan::call('migrate:fresh', ['--force' => true]);
-        
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Base de datos FORMATEADA y migraciones ejecutadas desde cero.',
-            'output' => Artisan::output()
-        ]);
-    } catch (\Exception $e) {
-        return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
-    }
-});
