@@ -116,13 +116,14 @@ class GameController extends Controller
 
     public function toggleFavorite($id)
     {
-        $game = Game::where('user_id', auth()->id())->findOrFail($id);
+        $game = \App\Models\Game::where('user_id', auth()->id())->findOrFail($id);
 
-        // 🚀 Evaluamos el valor actual y lo invertimos pasando un booleano estricto
-        $newStatus = $game->is_favorite ? false : true;
+        // Evaluamos el estado actual y preparamos el string literal para Postgres
+        $postgresBool = $game->is_favorite ? 'false' : 'true';
 
+        // DB::raw() fuerza a enviar la palabra literal sin que PHP interfiera
         $game->update([
-            'is_favorite' => $newStatus
+            'is_favorite' => \Illuminate\Support\Facades\DB::raw($postgresBool)
         ]);
 
         return response()->json($game->fresh());
