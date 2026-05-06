@@ -25,4 +25,9 @@ class Game extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    protected $casts = [
+        'is_favorite' => 'boolean',
+        'personal_rating' => 'integer',
+    ];
 }
