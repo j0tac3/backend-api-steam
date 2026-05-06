@@ -117,15 +117,13 @@ class GameController extends Controller
     public function toggleFavorite($id)
     {
         $game = \App\Models\Game::where('user_id', auth()->id())->findOrFail($id);
-
-        // Evaluamos el estado actual y preparamos el string literal para Postgres
-        $postgresBool = $game->is_favorite ? 'false' : 'true';
-
-        // DB::raw() fuerza a enviar la palabra literal sin que PHP interfiera
+        // 1. Invertimos el valor actual de forma limpia
+        $newStatus = !$game->is_favorite;
+        // 2. WORKAROUND: Forzamos DB::raw para evitar el error 'Datatype mismatch' 
+        // del driver PDO con PostgreSQL en el entorno de Render/Neon.
         $game->update([
-            'is_favorite' => \Illuminate\Support\Facades\DB::raw($postgresBool)
+            'is_favorite' => \Illuminate\Support\Facades\DB::raw($newStatus ? 'true' : 'false')
         ]);
-
         return response()->json($game->fresh());
     }
 
