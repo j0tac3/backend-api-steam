@@ -116,19 +116,17 @@ class GameController extends Controller
 
     public function toggleFavorite($id)
     {
+        // Buscamos el juego
         $game = Game::where('user_id', auth()->id())->findOrFail($id);
 
-        // 🚀 FORZAMOS EL CASTING MANUAL AQUÍ
-        $currentFavorite = (bool) $game->is_favorite;
-        $game->is_favorite = !$currentFavorite;
-        
-        // Usamos save() que es más compatible con los casts del modelo
-        $game->save();
-
-        return response()->json([
-            'id' => $game->id,
-            'is_favorite' => (bool) $game->is_favorite
+        // 🚀 Usamos update() directamente, que es más "agresivo" y 
+        // fuerza a PostgreSQL a entender el booleano gracias al $casts del modelo
+        $game->update([
+            'is_favorite' => !$game->is_favorite
         ]);
+
+        // Refrescamos el modelo para devolver los datos reales
+        return response()->json($game->fresh());
     }
 
     public function destroy(Request $request, $id)
