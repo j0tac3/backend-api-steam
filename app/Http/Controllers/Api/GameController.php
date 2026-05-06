@@ -114,15 +114,20 @@ class GameController extends Controller
         ]);
     }
 
-    public function toggleFavorite(Request $request, $id)
+    public function toggleFavorite($id)
     {
-        $game = $request->user()->games()->findOrFail($id);
-        $game->is_favorite = !$game->is_favorite;
+        $game = Game::where('user_id', auth()->id())->findOrFail($id);
+
+        // 🚀 FORZAMOS EL CASTING MANUAL AQUÍ
+        $currentFavorite = (bool) $game->is_favorite;
+        $game->is_favorite = !$currentFavorite;
+        
+        // Usamos save() que es más compatible con los casts del modelo
         $game->save();
 
         return response()->json([
-            'message'     => 'Favorito actualizado',
-            'is_favorite' => $game->is_favorite
+            'id' => $game->id,
+            'is_favorite' => (bool) $game->is_favorite
         ]);
     }
 
