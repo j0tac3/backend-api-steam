@@ -43,10 +43,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::get('/run-migrations-secret-url', function () {
     try {
-        Artisan::call('migrate', ['--force' => true]);
+        // 🚀 CAMBIAMOS 'migrate' POR 'migrate:fresh'
+        // ESTO BORRARÁ TODA LA BASE DE DATOS Y LA RECREARÁ
+        Artisan::call('migrate:fresh', ['--force' => true]);
+        
         return response()->json([
             'status' => 'success',
-            'message' => 'Migraciones ejecutadas correctamente',
+            'message' => 'Base de datos FORMATEADA y migraciones ejecutadas desde cero.',
             'output' => Artisan::output()
         ]);
     } catch (\Exception $e) {
