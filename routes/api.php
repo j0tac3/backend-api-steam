@@ -40,3 +40,27 @@ Route::middleware('auth:sanctum')->group(function () {
     // Logout
     Route::post('/logout', [AuthController::class, 'logout']);
 });
+
+Route::get('/run-migrations', function () {
+    try {
+        // Ejecutamos la migración forzada (necesario en producción)
+        Artisan::call('migrate', ['--force' => true]);
+        
+        // Limpiamos la caché por si acaso
+        Artisan::call('optimize:clear');
+        
+        // Obtenemos el texto de respuesta de la consola
+        $output = Artisan::output();
+        
+        return response()->json([
+            'success' => true,
+            'message' => '¡Comandos ejecutados con éxito!',
+            'console_output' => $output
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
+    }
+});
