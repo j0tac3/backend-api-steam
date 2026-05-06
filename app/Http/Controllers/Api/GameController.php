@@ -11,30 +11,25 @@ use App\Services\TranslationService;
 class GameController extends Controller
 {
     protected $igdbService;
-    protected $translator; // 🚀 Añadimos la propiedad
+    protected $translator;
 
-    // 🚀 2. Inyectamos también el TranslationService
     public function __construct(IgdbService $igdbService, TranslationService $translator)
     {
         $this->igdbService = $igdbService;
         $this->translator = $translator;
     }
 
-    // --- 1. Obtener la biblioteca del usuario logueado (PREPARADO PARA KANBAN) ---
     public function index(Request $request) 
     {
         $query = $request->user()->games();
 
-        // 🚀 FILTRO: Si Angular pide una pestaña específica (?status=jugando)
         if ($request->has('status')) {
             $query->where('status', $request->query('status'));
         }
 
-        // 🚀 PAGINACIÓN: Cambiamos ->get() por ->paginate() para el Virtual Scroll
         return $query->orderBy('created_at', 'desc')->paginate(20);
     }
 
-    // --- 2. Guardar un juego (Desde la "Aduana") ---
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -43,6 +38,10 @@ class GameController extends Controller
             'title'       => 'required|string',
             'cover_url'   => 'nullable|string',
             'status'      => 'required|string|in:pendiente,jugando,completado,abandonado',
+            'platform'    => 'nullable|string',
+            // 🚀 AÑADIMOS LAS DOS VARIABLES AQUÍ
+            'personal_rating' => 'nullable|integer',
+            'notes'       => 'nullable|string',
         ]);
 
         $existe = $request->user()->games()
@@ -60,32 +59,31 @@ class GameController extends Controller
             'title'       => $validated['title'],
             'cover_url'   => $validated['cover_url'],
             'status'      => $validated['status'],
+            'platform'    => $validated['platform'] ?? null,
+            // 🚀 Y LE DECIMOS A LARAVEL QUE LAS GUARDE EN LA BASE DE DATOS
+            'personal_rating' => $validated['personal_rating'] ?? 0,
+            'notes'       => $validated['notes'] ?? null,
         ]);
 
         return response()->json($game, 201);
     }
 
-    // En app/Http/Controllers/GameController.php
     public function update(Request $request, $id)
     {
-        // 1. Buscamos el juego en la base de datos que pertenezca al usuario autenticado
         $game = \App\Models\Game::where('user_id', auth()->id())->findOrFail($id);
 
-        // 2. Validamos los datos que nos manda Angular desde el Modal V2
         $validatedData = $request->validate([
             'platform' => 'nullable|string',
             'status' => 'required|string|in:pendiente,jugando,completado,abandonado',
-            // Puedes añadir más campos aquí si en el futuro permites editar nota, etc.
+            'notes' => 'nullable|string',
+            'personal_rating' => 'nullable|integer',
         ]);
 
-        // 3. Actualizamos y guardamos
         $game->update($validatedData);
 
-        // 4. Devolvemos el juego actualizado
         return response()->json($game);
     }
 
-    // --- 3. Actualizar el Estado (Para el Kanban/Tablero) ---
     public function updateStatus(Request $request, $id)
     {
         $game = $request->user()->games()->findOrFail($id);
@@ -99,7 +97,6 @@ class GameController extends Controller
         return response()->json($game);
     }
 
-    // --- 4. Actualizar el Diario (Desde el Modal de detalles) ---
     public function updateDiario(Request $request, $id) 
     {
         $game = $request->user()->games()->findOrFail($id);
@@ -117,7 +114,6 @@ class GameController extends Controller
         ]);
     }
 
-    // --- 5. Alternar Favorito ---
     public function toggleFavorite(Request $request, $id)
     {
         $game = $request->user()->games()->findOrFail($id);
@@ -130,7 +126,6 @@ class GameController extends Controller
         ]);
     }
 
-    // --- 6. Eliminar Juego ---
     public function destroy(Request $request, $id)
     {
         $game = $request->user()->games()->findOrFail($id);
@@ -138,7 +133,6 @@ class GameController extends Controller
         return response()->json(['message' => 'Juego eliminado de la colección']);
     }
 
-    // --- 7. Buscador Centralizado ---
     public function search(Request $request)
     {
         $query = $request->query('q');
@@ -169,7 +163,6 @@ class GameController extends Controller
         return response()->json($cleanGames);
     }
 
-    // --- E. DETALLES COMPLETOS (Para el Modal V2) ---
     public function getDetails(Request $request, $id)
     {
         $source = $request->query('source', 'igdb');
@@ -177,14 +170,12 @@ class GameController extends Controller
         if ($source === 'igdb') {
             $response = $this->igdbService->getGameDetails($id);
 
-            // 🚀 IGDB siempre devuelve un array. Sacamos el primer elemento [0]
             $rawDetails = is_array($response) && count($response) > 0 ? $response[0] : null;
 
             if (!$rawDetails) {
                 return response()->json(['message' => 'Juego no encontrado en IGDB'], 404);
             }
 
-            // 🚀 Mapeo corregido con las variables exactas de IGDB
             $mappedDetails = [
                 'id' => $rawDetails['id'] ?? $id,
                 'name' => $rawDetails['name'] ?? 'Desconocido',
@@ -195,7 +186,6 @@ class GameController extends Controller
                     
                 'releaseDate' => $rawDetails['first_release_date'] ?? null,
                 
-                // 🚀 3. Traducimos el texto antes de mandarlo a Angular
                 'summary' => isset($rawDetails['summary']) 
                     ? $this->translator->translateToSpanish($rawDetails['summary']) 
                     : null,
@@ -221,16 +211,13 @@ class GameController extends Controller
         return response()->json(['message' => 'Fuente no soportada'], 404);
     }
 
-    // --- 8. Contadores de la Biblioteca (Para las Tabs) ---
     public function getLibraryStats(Request $request)
     {
-        // Esto hace una sola consulta ultra rápida en SQL: SELECT status, count(*) GROUP BY status
         $stats = $request->user()->games()
             ->selectRaw('status, count(*) as count')
             ->groupBy('status')
             ->pluck('count', 'status');
 
-        // Nos aseguramos de devolver siempre todos los estados, aunque estén a 0
         return response()->json([
             'pendiente'  => $stats->get('pendiente', 0),
             'jugando'    => $stats->get('jugando', 0),
