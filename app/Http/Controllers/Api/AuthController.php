@@ -73,4 +73,29 @@ class AuthController extends Controller
             'message' => 'Sesión cerrada correctamente'
         ]);
     }
+
+    // 🚀 NUEVA FUNCIÓN: Guardar preferencias
+    public function updatePreferences(Request $request)
+    {
+        $request->validate([
+            'vista_biblioteca' => 'required|string|in:cuadricula,tablero',
+        ]);
+
+        $user = $request->user();
+        
+        // Recuperamos los ajustes actuales o creamos un array vacío
+        $settings = $user->settings ?? [];
+        
+        // Actualizamos la vista
+        $settings['vista_biblioteca'] = $request->vista_biblioteca;
+        
+        // Guardamos
+        $user->settings = $settings;
+        $user->save();
+
+        return response()->json([
+            'message' => 'Preferencias guardadas correctamente',
+            'settings' => $user->settings
+        ]);
+    }
 }

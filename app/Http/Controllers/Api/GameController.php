@@ -20,12 +20,18 @@ class GameController extends Controller
         $this->translator = $translator;
     }
 
-    // --- 1. Obtener la biblioteca del usuario logueado ---
+    // --- 1. Obtener la biblioteca del usuario logueado (PREPARADO PARA KANBAN) ---
     public function index(Request $request) 
     {
-        return $request->user()->games()
-                               ->orderBy('created_at', 'desc')
-                               ->get();
+        $query = $request->user()->games();
+
+        // 🚀 FILTRO: Si Angular pide una pestaña específica (?status=jugando)
+        if ($request->has('status')) {
+            $query->where('status', $request->query('status'));
+        }
+
+        // 🚀 PAGINACIÓN: Cambiamos ->get() por ->paginate() para el Virtual Scroll
+        return $query->orderBy('created_at', 'desc')->paginate(20);
     }
 
     // --- 2. Guardar un juego (Desde la "Aduana") ---
@@ -213,5 +219,24 @@ class GameController extends Controller
         }
 
         return response()->json(['message' => 'Fuente no soportada'], 404);
+    }
+
+    // --- 8. Contadores de la Biblioteca (Para las Tabs) ---
+    public function getLibraryStats(Request $request)
+    {
+        // Esto hace una sola consulta ultra rápida en SQL: SELECT status, count(*) GROUP BY status
+        $stats = $request->user()->games()
+            ->selectRaw('status, count(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status');
+
+        // Nos aseguramos de devolver siempre todos los estados, aunque estén a 0
+        return response()->json([
+            'pendiente'  => $stats->get('pendiente', 0),
+            'jugando'    => $stats->get('jugando', 0),
+            'completado' => $stats->get('completado', 0),
+            'abandonado' => $stats->get('abandonado', 0),
+            'total'      => $stats->sum()
+        ]);
     }
 }

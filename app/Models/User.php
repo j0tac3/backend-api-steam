@@ -18,24 +18,17 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'settings' => 'array', // 🚀 AÑADIDO: cast a array
         ];
     }
 
-    // app/Models/User.php
-
     public function games()
     {
-        // Esto le dice a Laravel que un usuario tiene muchos juegos
         return $this->hasMany(\App\Models\Game::class);
     }
 }

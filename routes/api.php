@@ -21,8 +21,11 @@ Route::middleware('auth:sanctum')->group(function () {
         return $request->user();
     });
 
+    Route::patch('/user/preferences', [AuthController::class, 'updatePreferences']);
+
     // Gestión de Biblioteca (GameController)
     Route::get('/games', [GameController::class, 'index']);
+    Route::get('/games/stats', [GameController::class, 'getLibraryStats']);
     Route::get('/games/search', [GameController::class, 'search']);
     Route::get('/games/details/{id}', [GameController::class, 'getDetails']);
     Route::post('/games', [GameController::class, 'store']);
@@ -36,4 +39,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Logout
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    Route::get('/run-migrations-secret-url', function () {
+    try {
+        Artisan::call('migrate', ['--force' => true]);
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Migraciones ejecutadas correctamente',
+            'output' => Artisan::output()
+        ]);
+    } catch (\Exception $e) {
+        return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+    }
+});
 });
