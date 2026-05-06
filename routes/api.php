@@ -39,8 +39,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Logout
     Route::post('/logout', [AuthController::class, 'logout']);
+});
 
-    Route::get('/run-migrations-secret-url', function () {
+Route::get('/run-migrations-secret-url', function () {
     try {
         Artisan::call('migrate', ['--force' => true]);
         return response()->json([
@@ -51,5 +52,4 @@ Route::middleware('auth:sanctum')->group(function () {
     } catch (\Exception $e) {
         return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
     }
-});
 });
