@@ -41,20 +41,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 });
 
-Route::get('/run-migrations', function () {
+Route::get('/reset-db', function () {
     try {
-        // Ejecutamos la migración forzada (necesario en producción)
-        Artisan::call('migrate', ['--force' => true]);
+        // Ejecuta migrate:fresh (Elimina todo y recrea)
+        Artisan::call('migrate:fresh', ['--force' => true]);
         
-        // Limpiamos la caché por si acaso
+        // Limpiamos la caché
         Artisan::call('optimize:clear');
         
-        // Obtenemos el texto de respuesta de la consola
         $output = Artisan::output();
         
         return response()->json([
             'success' => true,
-            'message' => '¡Comandos ejecutados con éxito!',
+            'message' => '¡Base de datos reseteada desde cero con éxito!',
             'console_output' => $output
         ]);
     } catch (\Exception $e) {
