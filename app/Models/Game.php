@@ -13,7 +13,6 @@ class Game extends Model
         'title',
         'cover_url',
         'status',
-        'notes',
         'personal_rating',
         'start_date',
         'platform',
@@ -28,6 +27,12 @@ class Game extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    // Un juego tiene muchas entradas de diario
+    public function journalEntries()
+    {
+        return $this->hasMany(JournalEntry::class)->orderBy('created_at', 'desc');
     }
 
 }

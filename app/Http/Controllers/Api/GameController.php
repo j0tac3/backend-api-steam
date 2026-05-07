@@ -21,27 +21,29 @@ class GameController extends Controller
 
     public function index(Request $request) 
     {
-        // Iniciamos la consulta base (solo los juegos del usuario autenticado)
         $query = $request->user()->games()
-            // 1. Filtro por Estado (ej: ?status=jugando)
+            
+            // 1. Filtro por Estado
             ->when($request->query('status'), function ($q, $status) {
-                // Si el status es 'todos' (que Angular suele enviar), lo ignoramos
                 if ($status !== 'todos') {
                     $q->where('status', $status);
                 }
             })
-            // 2. Filtro por Plataforma (ej: ?platform=ps5)
+            
+            // 2. Filtro por Plataforma (Compatible con Local y Prod)
             ->when($request->query('platform'), function ($q, $platform) {
                 if ($platform !== 'todas') {
-                    // Usamos ILIKE para que no importe si escriben ps5 o PS5
-                    $q->where('platform', 'ILIKE', '%' . $platform . '%');
+                    // Convertimos ambos lados a minúsculas usando whereRaw
+                    $q->whereRaw('LOWER(platform) LIKE ?', ['%' . strtolower($platform) . '%']);
                 }
             })
-            // 3. Filtro por Búsqueda de Texto (ej: ?search=batman)
+            
+            // 3. Filtro por Búsqueda de Texto (Compatible con Local y Prod)
             ->when($request->query('search'), function ($q, $search) {
-                $q->where('title', 'ILIKE', '%' . $search . '%');
+                // Convertimos ambos lados a minúsculas usando whereRaw
+                $q->whereRaw('LOWER(title) LIKE ?', ['%' . strtolower($search) . '%']);
             });
-        // Devolvemos los resultados ordenados por fecha y paginados a 20 por defecto
+
         return $query->orderBy('created_at', 'desc')->paginate(20);
     }
 

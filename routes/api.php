@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\GameController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\RadarController;
+use App\Http\Controllers\Api\JournalEntryController;
 
 // --- RUTAS PÚBLICAS (Sin Token) ---
 Route::post('/register', [AuthController::class, 'register']);
@@ -37,6 +38,32 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/games/{id}/diario', [GameController::class, 'updateDiario']);
     Route::patch('/games/{id}/favorite', [GameController::class, 'toggleFavorite']);
 
+    // --- RUTAS DEL DIARIO (JOURNAL) ---
+    Route::get('/games/{gameId}/journal', [JournalEntryController::class, 'index']);
+    Route::post('/games/{gameId}/journal', [JournalEntryController::class, 'store']);
+    Route::patch('/journal/{id}', [JournalEntryController::class, 'update']);
+    Route::delete('/journal/{id}', [JournalEntryController::class, 'destroy']);
+
     // Logout
     Route::post('/logout', [AuthController::class, 'logout']);
+});
+
+// ⚠️ ATENCIÓN: Borra o protege esta ruta tras usarla
+Route::get('/ejecutar-migracion-secreta', function () {
+    try {
+        // Ejecuta las migraciones pendientes
+        // '--force' es necesario si el servidor está en modo 'production'
+        Artisan::call('migrate', ['--force' => true]);
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Migraciones ejecutadas correctamente',
+            'output' => Artisan::output()
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 'error',
+            'message' => $e->getMessage()
+        ], 500);
+    }
 });
