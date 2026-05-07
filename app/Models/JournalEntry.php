@@ -15,6 +15,11 @@ class JournalEntry extends Model
         'is_featured'
     ];
 
+    // 🚀 ESTO ARREGLA EL ERROR DE POSTGRESQL
+    protected $casts = [
+        'is_featured' => 'boolean',
+    ];
+
     // Relación inversa: Una nota pertenece a un juego
     public function game()
     {
