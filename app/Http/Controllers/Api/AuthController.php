@@ -85,11 +85,10 @@ class AuthController extends Controller
             'vista_biblioteca' => 'string|in:cuadricula,tablero'
         ]);
 
-        // 🚀 FIX POSTGRESQL: Obligamos a mandar 'true' o 'false' literal en lugar de 1 o 0
+        // 🚀 Quitamos el DB::raw. Como ya pusimos el $casts en User.php, 
+        // Laravel sabe enviar 'false' a PostgreSQL y '0' a MySQL automáticamente.
         if (isset($data['is_public'])) {
-            $user->is_public = $data['is_public'] 
-                ? \Illuminate\Support\Facades\DB::raw('true') 
-                : \Illuminate\Support\Facades\DB::raw('false');
+            $user->is_public = $data['is_public'];
         }
 
         if (isset($data['vista_biblioteca'])) {
