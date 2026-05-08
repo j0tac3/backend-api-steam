@@ -24,14 +24,16 @@ class JournalEntryController extends Controller
     {
         $request->validate([
             'content' => 'required|string',
-            'is_featured' => 'boolean'
         ]);
 
         $game = $request->user()->games()->findOrFail($gameId);
 
+        // 🚀 FIX POSTGRESQL: Traducimos cualquier cosa que venga del frontend a un string literal
+        $isFeaturedString = $request->boolean('is_featured') ? 'true' : 'false';
+
         $entry = $game->journalEntries()->create([
             'content' => $request->content,
-            'is_featured' => $request->input('is_featured', false)
+            'is_featured' => $isFeaturedString
         ]);
 
         return response()->json($entry, 201);
@@ -40,17 +42,17 @@ class JournalEntryController extends Controller
     // 3. EDITAR UNA NOTA EXISTENTE O CAMBIAR LA ESTRELLA (PATCH)
     public function update(Request $request, $id)
     {
-        // Buscamos la nota asegurándonos de que su juego pertenezca a este usuario
         $entry = JournalEntry::whereHas('game', function($query) use ($request) {
             $query->where('user_id', $request->user()->id);
         })->findOrFail($id);
 
-        // Actualizamos solo lo que nos mande Angular (texto o estrella)
         if ($request->has('content')) {
             $entry->content = $request->content;
         }
+        
         if ($request->has('is_featured')) {
-            $entry->is_featured = $request->input('is_featured');
+            // 🚀 FIX POSTGRESQL: Misma traducción manual
+            $entry->is_featured = $request->boolean('is_featured') ? 'true' : 'false';
         }
 
         $entry->save();
