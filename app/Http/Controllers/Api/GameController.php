@@ -23,6 +23,13 @@ class GameController extends Controller
     {
         $query = $request->user()->games()
             
+            // 🚀 FASE 1: Subconsultas ligeras para los "Chivatos" visuales
+            ->withExists('journalEntries as has_notes')
+            ->withExists(['journalEntries as has_featured_notes' => function ($query) {
+                // Usamos whereRaw para evitar que Laravel/PDO malinterprete el booleano
+                $query->whereRaw('is_featured = true'); 
+            }])
+            
             // 1. Filtro por Estado
             ->when($request->query('status'), function ($q, $status) {
                 if ($status !== 'todos') {
