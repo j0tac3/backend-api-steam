@@ -75,22 +75,24 @@ class AuthController extends Controller
     }
 
     // 🚀 NUEVA FUNCIÓN: Guardar preferencias
+    // 🚀 NUEVA FUNCIÓN: Guardar preferencias
     public function updatePreferences(Request $request)
     {
         $user = $request->user();
         
         $data = $request->validate([
             'is_public' => 'boolean',
-            // 🚀 CAMBIO: Ahora aceptamos los términos que usa Angular
             'vista_biblioteca' => 'string|in:cuadricula,tablero'
         ]);
 
+        // 🚀 FIX POSTGRESQL: Obligamos a mandar 'true' o 'false' literal en lugar de 1 o 0
         if (isset($data['is_public'])) {
-            $user->is_public = $data['is_public'];
+            $user->is_public = $data['is_public'] 
+                ? \Illuminate\Support\Facades\DB::raw('true') 
+                : \Illuminate\Support\Facades\DB::raw('false');
         }
 
         if (isset($data['vista_biblioteca'])) {
-            // Guardamos el valor exacto (cuadricula o tablero) en el JSON de settings
             $user->settings = array_merge($user->settings ?? [], [
                 'vista_biblioteca' => $data['vista_biblioteca']
             ]);
