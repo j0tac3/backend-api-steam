@@ -27,8 +27,24 @@ class User extends Authenticatable
         ];
     }
 
+    protected $fillable = [
+        'name', 'email', 'password', 'username', 'is_public', // 👈 Añade estos dos
+    ];
+
     public function games()
     {
         return $this->hasMany(\App\Models\Game::class);
+    }
+
+    // 🚀 Generador automático de usernames (para que no haya nulos)
+    protected static function booted()
+    {
+        static::creating(function ($user) {
+            if (!$user->username) {
+                // Convierte "juan.perez@gmail.com" en "juanperez"
+                $base = strstr($user->email, '@', true);
+                $user->username = strtolower(preg_replace('/[^A-Za-z0-9]/', '', $base));
+            }
+        });
     }
 }

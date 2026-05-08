@@ -13,6 +13,9 @@ Route::post('/login', [AuthController::class, 'login']);
 
 // Mantenemos el Radar si aún lo usas para ofertas globales
 Route::get('/radar/ofertas', [RadarController::class, 'getSteamDeals']);
+// Rutas Públicas (Sin necesidad de login)
+Route::get('/public/profile/{username}', [GameController::class, 'getPublicProfile']);
+
 
 // --- RUTAS PRIVADAS (Requieren Token) ---
 Route::middleware('auth:sanctum')->group(function () {

@@ -251,4 +251,58 @@ class GameController extends Controller
             'total'      => $stats->sum()
         ]);
     }
+
+    public function getPublicProfile(Request $request, $username)
+    {
+        $user = \App\Models\User::where('username', $username)->firstOrFail();
+        
+        if (!$user->is_public && ($request->user()?->id !== $user->id)) {
+            return response()->json(['message' => 'Este perfil es privado'], 403);
+        }
+
+        // 🚀 1. STATS: Calculamos las estadísticas GLOBALES antes de filtrar nada
+        $stats = $user->games()
+            ->selectRaw('status, count(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status');
+
+        $estadisticas = [
+            'total'      => $stats->sum(),
+            'pendiente'  => $stats->get('pendiente', 0),
+            'jugando'    => $stats->get('jugando', 0),
+            'completado' => $stats->get('completado', 0),
+            'abandonado' => $stats->get('abandonado', 0),
+        ];
+
+        // 🎯 2. FILTROS: Obtenemos los juegos aplicando los filtros de la URL
+        $games = $user->games()
+            ->withExists('journalEntries as has_notes')
+            ->withExists(['journalEntries as has_featured_notes' => function ($query) {
+                $query->whereRaw('is_featured = true');
+            }])
+            ->when($request->query('status'), function ($q, $status) {
+                if ($status && $status !== 'todos') $q->where('status', $status);
+            })
+            ->when($request->query('platform'), function ($q, $platform) {
+                if ($platform && $platform !== 'todas') {
+                    $q->whereRaw('LOWER(platform) LIKE ?', ['%' . strtolower($platform) . '%']);
+                }
+            })
+            ->when($request->query('search'), function ($q, $search) {
+                if ($search) {
+                    $q->whereRaw('LOWER(title) LIKE ?', ['%' . strtolower($search) . '%']);
+                }
+            })
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'owner' => [
+                'name' => $user->name,
+                'username' => $user->username,
+            ],
+            'stats' => $estadisticas, // Enviamos los números reales
+            'games' => $games
+        ]);
+    }
 }
