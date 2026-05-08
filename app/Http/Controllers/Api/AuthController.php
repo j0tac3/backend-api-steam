@@ -77,25 +77,30 @@ class AuthController extends Controller
     // 🚀 NUEVA FUNCIÓN: Guardar preferencias
     public function updatePreferences(Request $request)
     {
-        $request->validate([
-            'vista_biblioteca' => 'required|string|in:cuadricula,tablero',
-        ]);
-
         $user = $request->user();
         
-        // Recuperamos los ajustes actuales o creamos un array vacío
-        $settings = $user->settings ?? [];
-        
-        // Actualizamos la vista
-        $settings['vista_biblioteca'] = $request->vista_biblioteca;
-        
-        // Guardamos
-        $user->settings = $settings;
+        $data = $request->validate([
+            'is_public' => 'boolean',
+            // 🚀 CAMBIO: Ahora aceptamos los términos que usa Angular
+            'vista_biblioteca' => 'string|in:cuadricula,tablero'
+        ]);
+
+        if (isset($data['is_public'])) {
+            $user->is_public = $data['is_public'];
+        }
+
+        if (isset($data['vista_biblioteca'])) {
+            // Guardamos el valor exacto (cuadricula o tablero) en el JSON de settings
+            $user->settings = array_merge($user->settings ?? [], [
+                'vista_biblioteca' => $data['vista_biblioteca']
+            ]);
+        }
+
         $user->save();
 
         return response()->json([
-            'message' => 'Preferencias guardadas correctamente',
-            'settings' => $user->settings
+            'message' => 'Preferencias actualizadas',
+            'user' => $user
         ]);
     }
 }
