@@ -32,7 +32,6 @@ class JournalEntryController extends Controller
         return response()->json($entry, 201);
     }
 
-    // 3. EDITAR UNA NOTA EXISTENTE O CAMBIAR LA ESTRELLA (PATCH)
     public function update(Request $request, $id)
     {
         // 1. Buscamos la nota asegurándonos de que pertenezca al usuario
@@ -40,19 +39,22 @@ class JournalEntryController extends Controller
             $query->where('user_id', $request->user()->id);
         })->findOrFail($id);
 
-        // 2. Si viene contenido, lo actualizamos
+        $updates = [];
+
+        // 2. Si viene contenido, lo preparamos para actualizar
         if ($request->has('content')) {
-            $entry->content = $request->content;
+            $updates['content'] = $request->content;
         }
         
-        // 3. Si viene la estrella, forzamos el tipo booleano real de PHP
+        // 3. 🚀 EL FIX PARA POSTGRESQL: Forzamos el booleano textual
         if ($request->has('is_featured')) {
-            // $request->boolean() convierte "true", 1, "1" en true real de PHP
-            $entry->is_featured = $request->boolean('is_featured');
+            $newStatus = $request->boolean('is_featured');
+            // Usamos DB::raw para que Laravel envíe 'true'/'false' literal a Postgres
+            $updates['is_featured'] = \Illuminate\Support\Facades\DB::raw($newStatus ? 'true' : 'false');
         }
 
-        // 4. Guardamos
-        $entry->save();
+        // 4. Ejecutamos la actualización
+        $entry->update($updates);
 
         // 5. Devolvemos el objeto fresco recién sacado de la base de datos
         return response()->json($entry->fresh());
