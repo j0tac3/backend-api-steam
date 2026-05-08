@@ -19,21 +19,14 @@ class JournalEntryController extends Controller
         return response()->json($game->journalEntries);
     }
 
-    // 2. CREAR UNA NUEVA NOTA (POST)
     public function store(Request $request, $gameId)
     {
-        $request->validate([
-            'content' => 'required|string',
-        ]);
-
+        $request->validate(['content' => 'required|string']);
         $game = $request->user()->games()->findOrFail($gameId);
 
-        // 🚀 FIX POSTGRESQL: Traducimos cualquier cosa que venga del frontend a un string literal
-        $isFeaturedString = $request->boolean('is_featured') ? 'true' : 'false';
-
+        // No enviamos 'is_featured'. Postgres le pondrá 'false' automáticamente.
         $entry = $game->journalEntries()->create([
-            'content' => $request->content,
-            'is_featured' => $isFeaturedString
+            'content' => $request->content
         ]);
 
         return response()->json($entry, 201);
