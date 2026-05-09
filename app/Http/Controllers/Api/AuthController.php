@@ -74,34 +74,41 @@ class AuthController extends Controller
         ]);
     }
 
-    // 🚀 NUEVA FUNCIÓN: Guardar preferencias
-    // 🚀 NUEVA FUNCIÓN: Guardar preferencias
     public function updatePreferences(Request $request)
     {
         $user = $request->user();
         
-        $data = $request->validate([
+        $request->validate([
             'is_public' => 'boolean',
             'vista_biblioteca' => 'string|in:cuadricula,tablero'
         ]);
 
-        // 🚀 Quitamos el DB::raw. Como ya pusimos el $casts en User.php, 
-        // Laravel sabe enviar 'false' a PostgreSQL y '0' a MySQL automáticamente.
-        if (isset($data['is_public'])) {
-            $user->is_public = $data['is_public'];
-        }
-
-        if (isset($data['vista_biblioteca'])) {
+        // 1. Guardamos la vista de la biblioteca de forma normal
+        if ($request->has('vista_biblioteca')) {
             $user->settings = array_merge($user->settings ?? [], [
-                'vista_biblioteca' => $data['vista_biblioteca']
+                'vista_biblioteca' => $request->vista_biblioteca
             ]);
+            $user->save();
         }
 
-        $user->save();
+        // 2. 🚀 FIX ANTI-FANTASMA PARA POSTGRESQL
+        // Usamos DB::table() para saltarnos el "cast" de Eloquent.
+        // Así nos aseguramos de que el 'false' llegue intacto a la base de datos.
+        if ($request->has('is_public')) {
+            $newStatus = $request->boolean('is_public');
+            
+            \Illuminate\Support\Facades\DB::table('users')
+                ->where('id', $user->id)
+                ->update([
+                    'is_public' => \Illuminate\Support\Facades\DB::raw($newStatus ? 'true' : 'false'),
+                    'updated_at' => now() // Actualizamos la fecha manualmente
+                ]);
+        }
 
+        // Devolvemos el usuario fresco. Al leerlo, el cast sí funciona a nuestro favor.
         return response()->json([
             'message' => 'Preferencias actualizadas',
-            'user' => $user
+            'user' => $user->fresh()
         ]);
     }
 }
