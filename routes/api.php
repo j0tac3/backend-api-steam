@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\GameController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\RadarController;
 use App\Http\Controllers\Api\JournalEntryController;
+use App\Http\Controllers\Api\ShareController;
 
 // --- RUTAS PÚBLICAS (Sin Token) ---
 Route::post('/register', [AuthController::class, 'register']);
@@ -13,8 +14,12 @@ Route::post('/login', [AuthController::class, 'login']);
 
 // Mantenemos el Radar si aún lo usas para ofertas globales
 Route::get('/radar/ofertas', [RadarController::class, 'getSteamDeals']);
+
 // Rutas Públicas (Sin necesidad de login)
 Route::get('/public/profile/{username}', [GameController::class, 'getPublicProfile']);
+Route::get('/share/{username}', [ShareController::class, 'handle']);
+// 🚀 Nueva ruta para la imagen dinámica
+Route::get('/share/{username}/image', [ShareController::class, 'generateImage']);
 
 
 // --- RUTAS PRIVADAS (Requieren Token) ---
