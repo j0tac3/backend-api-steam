@@ -13,8 +13,6 @@ class ShareController extends Controller
     {
         $user = User::where('username', $username)->firstOrFail();
         
-        // 🚀 INTELIGENCIA DE PRODUCCIÓN
-        // Busca FRONTEND_URL en el .env de Render. Si no lo encuentra, usa localhost.
         $frontendBase = env('FRONTEND_URL', 'http://localhost:4200');
         $frontendUrl = rtrim($frontendBase, '/') . '/u/' . $username;
 
@@ -26,11 +24,24 @@ class ShareController extends Controller
         $isBot = preg_match('/(bot|facebook|twitter|discord|whatsapp|telegram|linkedin)/i', $userAgent);
 
         if ($isBot) {
+            // 🚀 Obtenemos las estadísticas también para el texto
+            $stats = $user->games()
+                ->selectRaw('status, count(*) as count')
+                ->groupBy('status')
+                ->pluck('count', 'status');
+
+            $completados = $stats->get('completado', 0);
+            $jugando = $stats->get('jugando', 0);
+            $pendientes = $stats->get('pendiente', 0);
+
             return view('social_preview', [
                 'user' => $user,
                 'frontendUrl' => $frontendUrl,
-                // url() usa automáticamente el dominio donde esté alojado (Render o Localhost)
-                'imageUrl' => url('/api/share/' . $username . '/image') 
+                'imageUrl' => url('/api/share/' . $username . '/image'),
+                // Pasamos los números a la vista HTML
+                'completados' => $completados,
+                'jugando' => $jugando,
+                'pendientes' => $pendientes
             ]);
         }
 
