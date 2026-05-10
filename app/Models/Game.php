@@ -16,6 +16,7 @@ class Game extends Model
         'personal_rating',
         'start_date',
         'platform',
+        'active_platforms',
         'is_favorite'
     ];
 

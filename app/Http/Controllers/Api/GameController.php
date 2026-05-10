@@ -63,8 +63,8 @@ class GameController extends Controller
             'cover_url'   => 'nullable|string',
             'status'      => 'required|string|in:pendiente,jugando,completado,abandonado',
             'platform'    => 'nullable|string',
-            // 🚀 AÑADIMOS LAS DOS VARIABLES AQUÍ
             'personal_rating' => 'nullable|integer',
+            'active_platforms' => 'nullable|string',
             'notes'       => 'nullable|string',
         ]);
 
@@ -84,7 +84,7 @@ class GameController extends Controller
             'cover_url'   => $validated['cover_url'],
             'status'      => $validated['status'],
             'platform'    => $validated['platform'] ?? null,
-            // 🚀 Y LE DECIMOS A LARAVEL QUE LAS GUARDE EN LA BASE DE DATOS
+            'active_platforms' => $validated['active_platforms'] ?? null,
             'personal_rating' => $validated['personal_rating'] ?? 0,
             'notes'       => $validated['notes'] ?? null,
         ]);
@@ -98,6 +98,7 @@ class GameController extends Controller
 
         $validatedData = $request->validate([
             'platform' => 'nullable|string',
+            'active_platforms' => 'nullable|string',
             'status' => 'required|string|in:pendiente,jugando,completado,abandonado',
             'notes' => 'nullable|string',
             'personal_rating' => 'nullable|integer',
