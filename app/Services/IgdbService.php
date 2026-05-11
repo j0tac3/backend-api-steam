@@ -61,7 +61,6 @@ class IgdbService
     {
         $token = $this->getAccessToken();
 
-        // 🚀 La consulta limpia a IGDB
         $query = "fields name, summary, first_release_date, rating, rating_count, aggregated_rating, aggregated_rating_count, cover.image_id, genres.name, platforms.name, involved_companies.company.name, game_modes.name, screenshots.image_id; where id = {$id}; limit 1;";
 
         $response = Http::withHeaders([

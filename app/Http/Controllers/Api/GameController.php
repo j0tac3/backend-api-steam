@@ -7,16 +7,19 @@ use App\Models\Game;
 use Illuminate\Http\Request;
 use App\Services\IgdbService;
 use App\Services\TranslationService;
+use App\Services\HowLongToBeatService;
 
 class GameController extends Controller
 {
     protected $igdbService;
     protected $translator;
+    protected $hltbService;
 
-    public function __construct(IgdbService $igdbService, TranslationService $translator)
+    public function __construct(IgdbService $igdbService, TranslationService $translator, HowLongToBeatService $hltbService)
     {
         $this->igdbService = $igdbService;
         $this->translator = $translator;
+        $this->hltbService = $hltbService;
     }
 
     public function index(Request $request) 
@@ -38,10 +41,18 @@ class GameController extends Controller
             })
             
             // 2. Filtro por Plataforma (Compatible con Local y Prod)
+            // En el método index() de GameController.php
             ->when($request->query('platform'), function ($q, $platform) {
-                if ($platform !== 'todas') {
-                    // Convertimos ambos lados a minúsculas usando whereRaw
-                    $q->whereRaw('LOWER(platform) LIKE ?', ['%' . strtolower($platform) . '%']);
+                if ($platform && $platform !== 'todas') {
+                    // Separamos el string "PC,PS5" en un array ['PC', 'PS5']
+                    $platforms = explode(',', $platform);
+                    
+                    $q->where(function($query) use ($platforms) {
+                        foreach ($platforms as $p) {
+                            // Buscamos cada plataforma con un OR
+                            $query->orWhereRaw('LOWER(platform) LIKE ?', ['%' . strtolower($p) . '%']);
+                        }
+                    });
                 }
             })
             
@@ -202,6 +213,8 @@ class GameController extends Controller
                 return response()->json(['message' => 'Juego no encontrado en IGDB'], 404);
             }
 
+            $tiempos = $this->hltbService->getTimes($rawDetails['name']);
+
             $mappedDetails = [
                 'id' => $rawDetails['id'] ?? $id,
                 'name' => $rawDetails['name'] ?? 'Desconocido',
@@ -225,7 +238,7 @@ class GameController extends Controller
                 'platforms' => collect($rawDetails['platforms'] ?? [])->pluck('name')->toArray(),
                 'involvedCompanies' => collect($rawDetails['involved_companies'] ?? [])->pluck('company.name')->toArray(),
                 'gameModes' => collect($rawDetails['game_modes'] ?? [])->pluck('name')->toArray(),
-                
+                'time_to_beat' => $tiempos,
                 'screenshots' => collect($rawDetails['screenshots'] ?? [])->map(function($shot) {
                     return 'https://images.igdb.com/igdb/image/upload/t_screenshot_med/' . $shot['image_id'] . '.jpg';
                 })->toArray(),
