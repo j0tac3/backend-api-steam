@@ -11,10 +11,10 @@ class HowLongToBeatService
 {
     public function getTimes($gameName)
     {
-        return [
+        /* return [
             'main' => 15.5,
             '100_percent' => 42.0,
-        ];
+        ]; */
         // Limpiamos el nombre para la caché
         $cacheKey = 'hltb_' . Str::slug($gameName);
 

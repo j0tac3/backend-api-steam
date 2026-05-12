@@ -197,13 +197,18 @@ class GameController extends Controller
                 $coverUrl = 'https:' . $coverUrl;
             }
 
+            $releaseYear = null;
+            if (isset($game['first_release_date'])) {
+                $releaseYear = date('Y', $game['first_release_date']);
+            }
+
             return [
                 'external_id' => (string) $game['id'],
                 'title'       => $game['name'],
                 'cover_url'   => $coverUrl,
                 'source'      => 'igdb',
-                // Enviamos la categoría real al frontend por si quieres pintarla
-                'category'    => $game['category'] ?? 0 
+                'category'    => $game['category'] ?? 0,
+                'release_year'=> $releaseYear // New
             ];
         })->filter()->values();
 
