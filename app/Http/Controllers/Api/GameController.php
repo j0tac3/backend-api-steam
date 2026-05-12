@@ -173,29 +173,39 @@ class GameController extends Controller
     public function search(Request $request)
     {
         $query = $request->query('q');
+        
+        // 🚀 ATRAPAMOS LA CATEGORÍA DE LA URL (Si no viene, por defecto 'todas')
+        $category = $request->query('category', 'todas');
+
         if (!$query) {
             return response()->json([]);
         }
 
-        $rawGames = $this->igdbService->searchGames($query);
+        // 🚀 SE LA PASAMOS AL SERVICIO
+        $rawGames = $this->igdbService->searchGames($query, $category);
 
         if (!is_array($rawGames) || isset($rawGames['message'])) {
             return response()->json([]);
         }
 
         $cleanGames = collect($rawGames)->map(function ($game) {
+            if (!isset($game['id']) || !isset($game['name'])) return null;
+
             $coverUrl = null;
             if (isset($game['cover']['url'])) {
                 $coverUrl = str_replace('t_thumb', 't_cover_big', $game['cover']['url']);
                 $coverUrl = 'https:' . $coverUrl;
             }
+
             return [
                 'external_id' => (string) $game['id'],
                 'title'       => $game['name'],
                 'cover_url'   => $coverUrl,
                 'source'      => 'igdb',
+                // Enviamos la categoría real al frontend por si quieres pintarla
+                'category'    => $game['category'] ?? 0 
             ];
-        });
+        })->filter()->values();
 
         return response()->json($cleanGames);
     }
