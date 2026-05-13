@@ -250,7 +250,13 @@ class GameController extends Controller
                 'userScoreCount' => $rawDetails['rating_count'] ?? null,
                 
                 'genres' => collect($rawDetails['genres'] ?? [])->pluck('name')->toArray(),
-                'platforms' => collect($rawDetails['platforms'] ?? [])->pluck('name')->toArray(),
+                //'platforms' => collect($rawDetails['platforms'] ?? [])->pluck('name')->toArray(),
+                'platforms' => collect($rawDetails['platforms'] ?? [])->map(function($platform) {
+                    return [
+                        'name' => $platform['name'],
+                        'family' => \App\Models\Game::mapToFamily($platform['name'])
+                    ];
+                })->toArray(),
                 'involvedCompanies' => collect($rawDetails['involved_companies'] ?? [])->pluck('company.name')->toArray(),
                 'gameModes' => collect($rawDetails['game_modes'] ?? [])->pluck('name')->toArray(),
                 'time_to_beat' => $tiempos,
