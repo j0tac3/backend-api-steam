@@ -85,7 +85,8 @@ class GameController extends Controller
         
         // 🚀 CORRECCIÓN: Buscamos a través de la tabla satélite external_identifiers
         $game = Game::whereHas('externalIdentifiers', function($q) use ($validated) {
-            $q->where('provider', 'igdb')->where('external_id', (string) $id);
+            // 🔥 Añadimos (string) a $validated['external_id']
+            $q->where('provider', 'igdb')->where('external_id', (string) $validated['external_id']);
         })->first();
 
         if (!$game) {
@@ -165,10 +166,10 @@ class GameController extends Controller
         $user = $request->user();
 
         if ($source === 'igdb') {
-            // 🚀 CORRECCIÓN: Buscamos en local filtrando por la relación de identificadores externos
             $localGame = Game::with(['genres', 'platforms', 'media', 'stores', 'dlcs.media'])
                         ->whereHas('externalIdentifiers', function($q) use ($id) {
-                            $q->where('provider', 'igdb')->where('external_id', $id);
+                            // 🔥 Añadimos (string) a $id
+                            $q->where('provider', 'igdb')->where('external_id', (string) $id);
                         })->first();
 
             if ($localGame) {
@@ -474,7 +475,8 @@ class GameController extends Controller
         
         if (!$localGame && $igdbId) {
             $localGame = Game::whereHas('externalIdentifiers', function($q) use ($igdbId) {
-                $q->where('provider', 'igdb')->where('external_id', $igdbId);
+                // 🔥 Añadimos (string) a $igdbId
+                $q->where('provider', 'igdb')->where('external_id', (string) $igdbId);
             })->first();
         }
 
