@@ -498,11 +498,26 @@ class GameController extends Controller
                     );
 
                     // 🖼️ GUARDAR LA CARÁTULA EN LA TABLA MEDIA
+                    // 🖼️ GUARDAR LA CARÁTULA EN LA TABLA MEDIA (Versión Blindada Postgres)
                     if (isset($raw['cover']['image_id'])) {
-                        $localGame->media()->updateOrCreate(
-                            ['type' => 'cover', 'is_primary' => true],
-                            ['source' => 'igdb', 'path' => $raw['cover']['image_id']]
-                        );
+                        $cover = $localGame->media()
+                            ->where('type', 'cover')
+                            ->whereRaw('is_primary = true') // 🔥 Evita que Laravel envíe un 1
+                            ->first();
+                        
+                        if ($cover) {
+                            $cover->update([
+                                'source' => 'igdb', 
+                                'path' => $raw['cover']['image_id']
+                            ]);
+                        } else {
+                            $localGame->media()->create([
+                                'type' => 'cover', 
+                                'source' => 'igdb', 
+                                'path' => $raw['cover']['image_id'], 
+                                'is_primary' => true
+                            ]);
+                        }
                     }
                     // 📸 GUARDAR CAPTURAS DE IGDB
                     if (isset($raw['screenshots'])) {
