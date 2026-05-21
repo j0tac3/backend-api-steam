@@ -98,7 +98,7 @@ class GameController extends Controller
         foreach ($validated['platform_ids'] as $platId) {
             $entry = UserGame::firstOrCreate(
                 ['user_id' => $user->id, 'game_id' => $game->id, 'platform_id' => $platId],
-                ['status' => $validated['status'], 'personal_rating' => 0, 'is_favorite' => false, 'playtime_minutes' => 0]
+                ['status' => $validated['status'], 'personal_rating' => 0, 'is_favorite' => DB::raw('false'), 'playtime_minutes' => 0] // 🔥 Blindado
             );
             if ($entry->wasRecentlyCreated) $addedCount++;
         }
@@ -583,7 +583,7 @@ class GameController extends Controller
 
         UserGame::updateOrCreate(
             ['user_id' => $userId, 'game_id' => $localGame->id, 'platform_id' => $platformPc->id],
-            ['status' => 'jugando', 'playtime_minutes' => $playtime, 'personal_rating' => 0, 'is_favorite' => false]
+            ['status' => 'jugando', 'playtime_minutes' => $playtime, 'personal_rating' => 0, 'is_favorite' => DB::raw('false')] // 🔥 Blindado
         );
 
         // 🤖 6. A LA COLA DEL MOTOR EN SEGUNDO PLANO
