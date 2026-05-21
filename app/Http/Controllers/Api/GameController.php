@@ -37,7 +37,8 @@ class GameController extends Controller
         $userId = $request->user()->id;
 
         $gamesQuery = Game::with([
-            'media' => function($q) { $q->where('is_primary', true); },
+            // 🔥 Blindado para lectura
+            'media' => function($q) { $q->whereRaw('is_primary = true'); },
             'inventoryEntries' => function($q) use ($userId) {
                 $q->where('user_id', $userId)->with('platform');
             }
@@ -275,7 +276,8 @@ class GameController extends Controller
             ->pluck('count', 'status');
 
         $games = Game::with([
-            'media' => function($q) { $q->where('is_primary', true); },
+            // 🔥 Blindado para lectura
+            'media' => function($q) { $q->whereRaw('is_primary = true'); },
             'inventoryEntries' => function($q) use ($user) {
                 $q->where('user_id', $user->id)->with('platform');
             }
