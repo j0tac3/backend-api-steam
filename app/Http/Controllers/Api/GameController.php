@@ -556,10 +556,25 @@ class GameController extends Controller
                 );
 
                 // 🖼️ GUARDAR LA CARÁTULA DE STEAM EN LA TABLA MEDIA
-                $localGame->media()->updateOrCreate(
-                    ['type' => 'cover', 'is_primary' => true],
-                    ['source' => 'steam', 'path' => "https://steamcdn-a.akamaihd.net/steam/apps/{$steamId}/library_600x900.jpg"]
-                );
+                // 🖼️ GUARDAR LA CARÁTULA DE STEAM EN LA TABLA MEDIA (Versión Blindada Postgres)
+                $steamCover = $localGame->media()
+                    ->where('type', 'cover')
+                    ->whereRaw('is_primary = true') // 🔥 Evita que Laravel envíe un 1 en la búsqueda
+                    ->first();
+                
+                if ($steamCover) {
+                    $steamCover->update([
+                        'source' => 'steam', 
+                        'path' => "https://steamcdn-a.akamaihd.net/steam/apps/{$steamId}/library_600x900.jpg"
+                    ]);
+                } else {
+                    $localGame->media()->create([
+                        'type' => 'cover', 
+                        'source' => 'steam', 
+                        'path' => "https://steamcdn-a.akamaihd.net/steam/apps/{$steamId}/library_600x900.jpg", 
+                        'is_primary' => DB::raw('true') // 🔥 Evita que Laravel envíe un 1 al guardar
+                    ]);
+                }
             }
         }
 
