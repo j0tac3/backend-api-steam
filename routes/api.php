@@ -7,6 +7,10 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\RadarController;
 use App\Http\Controllers\Api\JournalEntryController;
 use App\Http\Controllers\Api\ShareController;
+use App\Http\Controllers\Api\StatsController;
+use App\Http\Controllers\Api\DiscoverController;
+use Illuminate\Support\Facades\Schedule;
+
 
 // --- RUTAS PÚBLICAS (Sin Token) ---
 Route::post('/register', [AuthController::class, 'register']);
@@ -21,7 +25,6 @@ Route::get('/share/{username}', [ShareController::class, 'handle']);
 // 🚀 Nueva ruta para la imagen dinámica
 Route::get('/share/{username}/image', [ShareController::class, 'generateImage']);
 
-
 // --- RUTAS PRIVADAS (Requieren Token) ---
 Route::middleware('auth:sanctum')->group(function () {
     
@@ -33,12 +36,34 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/user/preferences', [AuthController::class, 'updatePreferences']);
 
     // Gestión de Biblioteca (GameController)
-    Route::get('/games', [GameController::class, 'index']);
+    /* Route::get('/games', [GameController::class, 'index']);
     Route::get('/games/stats', [GameController::class, 'getLibraryStats']);
     Route::get('/games/search', [GameController::class, 'search']);
     Route::get('/games/details/{id}', [GameController::class, 'getDetails']);
     Route::post('/games', [GameController::class, 'store']);
+    Route::delete('/games/{id}', [GameController::class, 'destroy']); */
+
+    // Gestión de Biblioteca (GameController)
+    Route::get('/games', [GameController::class, 'index']);
+    Route::get('/games/stats', [GameController::class, 'getLibraryStats']);
+    Route::get('/games/search', [GameController::class, 'search']);
+    
+    // 🚀 Aquí cambiamos el antiguo getDetails por el nuevo show que usa el slug
+    Route::get('/games/details/{slug}', [GameController::class, 'show']); 
+    
+    Route::post('/games', [GameController::class, 'store']);
     Route::delete('/games/{id}', [GameController::class, 'destroy']);
+    
+    // 🔄 Actualizaciones específicas (Tabla Pivote)
+    Route::patch('/games/{id}/status', [GameController::class, 'updateStatus']);
+    Route::patch('/games/{id}/favorite', [GameController::class, 'toggleFavorite']);
+
+    // 🌍 Ruta para la Pantalla Descubrir
+    Route::get('discover/feed', [DiscoverController::class, 'getDiscoverFeed']);
+
+    Route::post('/steam/sync-prepare', [GameController::class, 'prepareSteamSync']);
+    Route::post('/steam/sync-single', [GameController::class, 'syncSingleSteamGame']);
+
     
     // Actualizaciones específicas (PATCH es más semántico para cambios parciales)
     Route::put('/games/{id}', [GameController::class, 'update']);
@@ -51,6 +76,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/games/{gameId}/journal', [JournalEntryController::class, 'store']);
     Route::patch('/journal/{id}', [JournalEntryController::class, 'update']);
     Route::delete('/journal/{id}', [JournalEntryController::class, 'destroy']);
+
+    // 📊 Ruta para el Dashboard Analítico
+    Route::get('/stats/advanced', [StatsController::class, 'getAdvancedStats']);
+
+    Schedule::command('games:fetch-metadata')->everyMinute()->withoutOverlapping();
 
     // Logout
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -74,4 +104,22 @@ Route::get('/ejecutar-migracion-secreta', function () {
             'message' => $e->getMessage()
         ], 500);
     }
+});
+Route::get('/worker/run', function (Request $request) {
+    // 1. Verificamos el candado de seguridad
+    $secret = env('WORKER_SECRET_TOKEN');
+    
+    if (!$secret || $request->query('token') !== $secret) {
+        return response()->json(['error' => 'Acceso denegado. Candado cerrado.'], 401);
+    }
+
+    // 2. Despertamos al trabajador
+    // --stop-when-empty: Se vuelve a dormir en cuanto no hay más juegos.
+    // --max-time=50: Evita que Render nos tire el proceso por durar más de 1 minuto.
+    Artisan::call('queue:work', [
+        '--stop-when-empty' => true,
+        '--max-time' => 50,
+    ]);
+
+    return response()->json(['status' => 'Sincronización procesada y trabajador dormido']);
 });

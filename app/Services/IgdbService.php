@@ -117,13 +117,17 @@ class IgdbService
     /**
      * Obtener los detalles GOD MODE desde IGDB
      */
+    /**
+     * Obtener los detalles GOD MODE desde IGDB
+     */
     public function getGameDetails($id)
     {
         $token = $this->getAccessToken();
 
-        // 🚀 LA CONSULTA MAESTRA (Extrae relaciones, empresas, websites, modos, etc.)
-        $query = "fields *, cover.*, artworks.*, screenshots.*, genres.name, platforms.name, game_modes.name, themes.name, player_perspectives.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, websites.category, websites.url, similar_games.name, similar_games.cover.url; where id = {$id}; limit 1;";
-
+        // 🚀 CONSULTA CORREGIDA: Eliminamos 'localizations.*' que era lo que hacía explotar la API
+        // 🚀 CONSULTA SEGURA: Usamos 'alternative_names' en lugar del problemático 'localizations'
+        $query = "fields *, cover.*, artworks.*, screenshots.*, genres.name, platforms.name, game_modes.name, themes.name, player_perspectives.name, involved_companies.company.name, involved_companies.developer, involved_companies.publisher, websites.category, websites.url, similar_games.name, similar_games.cover.url, language_supports.language.name, language_supports.language.native_name, language_supports.language_support_type.name, alternative_names.*; where id = {$id}; limit 1;";
+        
         // Limpiamos saltos de línea para evitar errores de parseo en IGDB
         $cleanQuery = trim(preg_replace('/\s+/', ' ', $query));
 
@@ -134,6 +138,244 @@ class IgdbService
         ->withBody($cleanQuery, 'text/plain')
         ->post("{$this->baseUrl}/games");
 
-        return $response->json();
+        $data = $response->json();
+
+        // 🛡️ ESCUDO PROTECTOR: Si la API de IGDB devuelve un error de sintaxis o falla, evitamos que el modal explote
+        if (isset($data[0]['status']) && isset($data[0]['title'])) {
+            \Illuminate\Support\Facades\Log::error('IGDB Error de Consulta: ' . json_encode($data));
+            return [];
+        }
+
+        return $data;
+    }
+
+    /**
+     * 🏆 1. LOS TITANES (Triple A Recomendados)
+     * Más de 80 de nota, más de 300 valoraciones, filtrado por género favorito.
+     */
+    /**
+     * 🏆 1. LOS TITANES (Triple A Recomendados)
+     * Usamos 'total_rating_count' (Usuarios + Prensa). Con más de 20 en IGDB ya es un AAA.
+     */
+    /**
+     * 🏆 1. LOS TITANES
+     */
+    public function getTitans($genreId, $limit = 10)
+    {
+        $token = $this->getAccessToken();
+        
+        // 🚀 SIN CORCHETES en genres
+        $query = "fields name, cover.url, first_release_date, rating, genres.name; 
+                  where rating >= 80 & rating_count >= 50 & cover != null & genres = {$genreId}; 
+                  sort rating desc; 
+                  limit {$limit};";
+
+        return $this->executeIgdbQuery($query, $token);
+    }
+
+    /**
+     * 🔥 2. EL RADAR 
+     */
+    public function getRadar($startTimestamp, $endTimestamp, $limit = 10)
+    {
+        $token = $this->getAccessToken();
+        
+        // 🚀 Buscamos lanzamientos recientes puros y duros
+        $query = "fields name, cover.url, first_release_date, rating; 
+                  where first_release_date >= {$startTimestamp} & first_release_date <= {$endTimestamp} & cover != null; 
+                  sort first_release_date desc; 
+                  limit {$limit};";
+
+        return $this->executeIgdbQuery($query, $token);
+    }
+
+    /**
+     * 💎 3. JOYAS OCULTAS
+     */
+    public function getHiddenGems($limit = 10)
+    {
+        $token = $this->getAccessToken();
+        
+        // 🚀 Juegos con notazas pero que los ha votado muy poca gente (entre 1 y 15 personas)
+        $query = "fields name, cover.url, first_release_date, rating; 
+                  where rating >= 80 & rating_count > 0 & rating_count <= 15 & cover != null; 
+                  sort rating desc; 
+                  limit {$limit};";
+
+        return $this->executeIgdbQuery($query, $token);
+    }
+
+    /**
+     * 🛠️ FUNCIÓN AUXILIAR (Para no repetir código)
+     */
+    private function executeIgdbQuery($query, $token)
+    {
+        $cleanQuery = trim(preg_replace('/\s+/', ' ', $query));
+
+        $response = \Illuminate\Support\Facades\Http::withHeaders([
+            'Client-ID' => $this->clientId,
+            'Authorization' => 'Bearer ' . $token,
+        ])->withBody($cleanQuery, 'text/plain')->post("{$this->baseUrl}/games");
+
+        $data = $response->json();
+
+        // 🐛 CHIVATO ACTIVADO: Si hay error, que nos lo devuelva al F12
+        if (isset($data['message']) || isset($data[0]['status'])) {
+            return ['DEBUG_ERROR' => $data];
+        }
+
+        return $data;
+    }
+
+    /**
+     * 🚂 STEAM FASE 1: Traer la biblioteca del usuario con sus horas
+     */
+    public function getSteamLibrary($steamId64)
+    {
+        $apiKey = env('STEAM_API_KEY');
+        
+        $response = \Illuminate\Support\Facades\Http::get("http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/", [
+            'key' => $apiKey,
+            'steamid' => $steamId64,
+            'include_appinfo' => true, // 🚨 CAMBIADO A TRUE para que nos traiga los nombres
+            'format' => 'json'
+        ]);
+
+        $data = $response->json();
+
+        if (!isset($data['response']['games'])) {
+            return [];
+        }
+
+        // Ahora guardamos tanto el nombre como los minutos
+        $steamGames = [];
+        foreach ($data['response']['games'] as $game) {
+            $steamGames[$game['appid']] = [
+                'name' => $game['name'],
+                'playtime' => $game['playtime_forever']
+            ];
+        }
+
+        return $steamGames;
+    }
+
+    public function translateSteamIdsToIgdb(array $steamIds)
+    {
+        $token = $this->getAccessToken();
+        $map = [];
+
+        // 1. Dividimos los juegos en paquetes de 40 para no ahogar a IGDB
+        $chunks = array_chunk($steamIds, 40);
+
+        foreach ($chunks as $chunk) {
+            $uidConditions = [];
+            foreach ($chunk as $id) {
+                $uidConditions[] = 'uid = "' . $id . '"';
+            }
+            $whereClause = implode(' | ', $uidConditions);
+
+            // 2. LA CLAVE: Pedimos el id del juego, pero también expandimos la información
+            // del juego (game.category) para filtrar la basura que IGDB devuelve.
+            // (En la tabla 'games', category 0 = Juego Base).
+            // Quitamos el maldito filtro 'category = 1' de la tabla externa.
+            $query = "fields game.id, game.category, uid; where ({$whereClause}); limit 500;";
+
+            $response = \Illuminate\Support\Facades\Http::withHeaders([
+                'Client-ID' => $this->clientId,
+                'Authorization' => 'Bearer ' . $token,
+                'Accept' => 'application/json',
+            ])->withBody($query, 'text/plain')->post("{$this->baseUrl}/external_games");
+
+            $data = $response->json();
+
+            // 3. Procesamos y limpiamos los datos
+            if (is_array($data) && !isset($data['message'])) {
+                foreach ($data as $ext) {
+                    if (isset($ext['uid']) && isset($ext['game']['id'])) {
+                        $steamId = $ext['uid'];
+                        $igdbGameId = $ext['game']['id'];
+                        $gameCategory = $ext['game']['category'] ?? -1;
+
+                        // Solo nos quedamos con el mapeo si es un Juego Base (0), 
+                        // un Remake (8) o un Remaster (9).
+                        // Y si ya teníamos un mapeo para este Steam ID, no lo sobreescribimos
+                        // (esto prioriza el primer juego válido que encuentre).
+                        if (!isset($map[$steamId]) && in_array($gameCategory, [0, 8, 9])) {
+                            $map[$steamId] = $igdbGameId;
+                        }
+                    }
+                }
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * 🕵️‍♂️ Búsqueda difusa por nombre en IGDB (Ignorando DLCs y basura)
+     */
+    /**
+     * 🕵️‍♂️ Búsqueda difusa por nombre en IGDB con reintentos inteligentes
+     */
+    public function searchGameByName(string $name)
+    {
+        $token = $this->getAccessToken();
+        
+        // 1. Limpieza básica (comillas y marcas registradas)
+        $safeName = trim(str_replace(['"', '™', '®'], '', $name));
+
+        // 🎯 INTENTO 1: Búsqueda normal exacta (Ej: "Counter-Strike 2")
+        $id = $this->executeIgdbSearch($safeName, $token);
+        if ($id) return $id;
+
+        // 🎯 INTENTO 2: Quitar coletillas de Steam ("- Definitive Edition", ": Enhanced Edition")
+        // Esto elimina cualquier cosa que esté después de un guión e incluya la palabra "Edition"
+        $agressiveName = preg_replace('/ - .*Edition/i', '', $safeName);
+        $agressiveName = preg_replace('/: .*Edition/i', '', $agressiveName);
+        
+        if ($agressiveName !== $safeName) {
+            $id = $this->executeIgdbSearch(trim($agressiveName), $token);
+            if ($id) return $id;
+        }
+
+        // 🎯 INTENTO 3: Medida desesperada, cortar por los dos puntos
+        // Si se llama "Total War: EMPIRE", probará suerte buscando solo "Total War" 
+        // y cogerá el resultado más relevante.
+        if (strpos($safeName, ':') !== false) {
+            $splitName = explode(':', $safeName)[0];
+            $id = $this->executeIgdbSearch(trim($splitName), $token);
+            if ($id) return $id;
+        }
+
+        return null; // Si después de 3 intentos no lo encuentra, nos rendimos con este juego.
+    }
+
+    /**
+     * 🔌 Función auxiliar para no repetir la llamada HTTP en cada intento
+     */
+    private function executeIgdbSearch(string $queryName, string $token)
+    {
+        $query = "search \"{$queryName}\"; fields id, name, category; limit 5;";
+
+        $response = \Illuminate\Support\Facades\Http::withHeaders([
+            'Client-ID' => $this->clientId,
+            'Authorization' => 'Bearer ' . $token,
+            'Accept' => 'application/json',
+        ])->withBody($query, 'text/plain')->post("{$this->baseUrl}/games");
+
+        $data = $response->json();
+
+        if (is_array($data) && count($data) > 0 && !isset($data['message'])) {
+            // Priorizamos juego base, remake o remaster
+            foreach ($data as $game) {
+                if (isset($game['category']) && in_array($game['category'], [0, 8, 9])) {
+                    return $game['id'];
+                }
+            }
+            // Si no, cogemos el primer resultado que nos dé
+            return $data[0]['id'] ?? null;
+        }
+
+        return null;
     }
 }

@@ -11,20 +11,14 @@ return new class extends Migration
         Schema::create('journal_entries', function (Blueprint $table) {
             $table->id();
             
-            // Relación con tu tabla de juegos guardados 
-            // (Asumo que tu tabla se llama 'games', ajusta si es 'user_games')
-            $table->foreignId('game_id')
-                  ->constrained('games')
-                  ->onDelete('cascade'); 
-                  
+            // 🚀 ESTA ES LA LÍNEA QUE FALTABA
+            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete(); 
+            
+            $table->foreignId('game_id')->constrained('games')->cascadeOnDelete();
+            
             $table->text('content');
-            $table->boolean('is_featured')->default(false); // Para la estrella
+            $table->boolean('is_featured')->default(false);
             $table->timestamps();
-        });
-
-        // Opcional pero recomendado: Borramos la columna antigua 'notes' para mantener la BD limpia
-        Schema::table('games', function (Blueprint $table) {
-            $table->dropColumn('notes');
         });
     }
 

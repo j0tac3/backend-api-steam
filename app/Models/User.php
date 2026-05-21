@@ -2,21 +2,23 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
 use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
+
+    protected $fillable = [
+        'name', 'email', 'password', 'username', 'is_public',
+    ];
+
+    protected $hidden = [
+        'password', 'remember_token',
+    ];
 
     protected function casts(): array
     {
@@ -28,21 +30,16 @@ class User extends Authenticatable
         ];
     }
 
-    protected $fillable = [
-        'name', 'email', 'password', 'username', 'is_public', // 👈 Añade estos dos
-    ];
-
-    public function games()
+    // 🚀 DEFINITIVO: Relación directa a las copias de tu inventario
+    public function inventory(): HasMany
     {
-        return $this->hasMany(\App\Models\Game::class);
+        return $this->hasMany(UserGame::class, 'user_id');
     }
 
-    // 🚀 Generador automático de usernames (para que no haya nulos)
     protected static function booted()
     {
         static::creating(function ($user) {
             if (!$user->username) {
-                // Convierte "juan.perez@gmail.com" en "juanperez"
                 $base = strstr($user->email, '@', true);
                 $user->username = strtolower(preg_replace('/[^A-Za-z0-9]/', '', $base));
             }

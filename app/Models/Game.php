@@ -2,82 +2,49 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Game extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
-        'user_id',
-        'external_id',
-        'source',
-        'title',
-        'cover_url',
-        'status',
-        'personal_rating',
-        'start_date',
-        'platform',
-        'active_platforms',
-        'is_favorite'
+        'parent_id', 'category', 'name', 'slug', 'summary',
+        'release_date', 'rating', 'localized_data', 'supported_languages', 'igdb_user_rating',
     ];
 
-    protected $casts = [
-        'is_favorite' => 'boolean',
-    ];
-
-    // 🚀 1. AÑADIMOS EL ATRIBUTO VIRTUAL AL JSON DE SALIDA
-    protected $appends = ['platform_families'];
-
-    // Relación con el usuario
-    public function user()
+    protected function casts(): array
     {
-        return $this->belongsTo(User::class);
+        return [
+            'release_date' => 'date',
+            'rating' => 'decimal:2',
+            'localized_data' => 'array',
+            'supported_languages' => 'array',
+        ];
     }
 
-    public function journalEntries()
-    {
-        return $this->hasMany(JournalEntry::class)->orderBy('created_at', 'desc');
+    public function dlcs(): HasMany { return $this->hasMany(Game::class, 'parent_id'); }
+    public function parentGame(): BelongsTo { return $this->belongsTo(Game::class, 'parent_id'); }
+    public function media(): HasMany { return $this->hasMany(GameMedia::class); }
+    public function genres(): BelongsToMany { return $this->belongsToMany(Genre::class, 'game_genre')->withTimestamps(); }
+    public function platforms(): BelongsToMany { return $this->belongsToMany(Platform::class, 'game_platform')->withTimestamps(); }
+    public function stores(): BelongsToMany { 
+        return $this->belongsToMany(Store::class, 'game_store')->withPivot('external_id', 'external_url')->withTimestamps(); 
     }
 
-    // 🚀 2. EL ACCESSOR QUE MASTICA LOS DATOS PARA ANGULAR
-    public function getPlatformFamiliesAttribute()
+    // 🚀 DEFINITIVO: Relación limpia hacia las entradas del inventario de los usuarios
+    public function inventoryEntries(): HasMany
     {
-        if (empty($this->platform)) return [];
-        
-        // Si tienes varias plataformas separadas por comas (ej. "PlayStation 5, PC")
-        $platforms = array_map('trim', explode(',', $this->platform));
-        $mapped = [];
-        
-        foreach ($platforms as $name) {
-            $mapped[] = [
-                'name' => $name, // "PlayStation 5"
-                'family' => self::mapToFamily($name) // "playstation"
-            ];
-        }
-        
-        return $mapped;
+        return $this->hasMany(UserGame::class, 'game_id');
     }
 
-    // 🚀 3. EL DICCIONARIO MAESTRO ("GOD MODE")
-    public static function mapToFamily($name)
+    // Añade esto dentro de la clase Game
+    public function externalIdentifiers()
     {
-        $lower = strtolower(trim($name));
-
-        if (str_contains($lower, 'playstation') || in_array($lower, ['ps vita', 'psp', 'ps1', 'ps2', 'ps3', 'ps4', 'ps5'])) {
-            return 'playstation';
-        }
-        if (str_contains($lower, 'xbox')) {
-            return 'xbox';
-        }
-        if (str_contains($lower, 'nintendo') || str_contains($lower, 'game boy') || in_array($lower, ['wii', 'wii u', 'switch', 'ds', '3ds', 'snes', 'nes', 'gamecube', 'n64'])) {
-            return 'nintendo';
-        }
-        if (str_contains($lower, 'pc') || str_contains($lower, 'windows') || in_array($lower, ['mac', 'linux', 'steam'])) {
-            return 'pc';
-        }
-        if (str_contains($lower, 'ios') || str_contains($lower, 'android') || str_contains($lower, 'mobile')) {
-            return 'mobile';
-        }
-        
-        return 'other'; // Retro, Arcade, Sega, Atari...
+        return $this->hasMany(GameExternalIdentifier::class);
     }
 }

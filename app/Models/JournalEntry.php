@@ -9,11 +9,7 @@ class JournalEntry extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'game_id',
-        'content',
-        'is_featured'
-    ];
+    protected $fillable = ['user_id', 'game_id', 'content', 'is_featured'];
 
     // 🚀 ESTO ARREGLA EL ERROR DE POSTGRESQL
     protected $casts = [
