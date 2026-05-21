@@ -85,7 +85,7 @@ class GameController extends Controller
         
         // 🚀 CORRECCIÓN: Buscamos a través de la tabla satélite external_identifiers
         $game = Game::whereHas('externalIdentifiers', function($q) use ($validated) {
-            $q->where('provider', 'igdb')->where('external_id', $validated['external_id']);
+            $q->where('provider', 'igdb')->where('external_id', (string) $id);
         })->first();
 
         if (!$game) {
@@ -459,7 +459,7 @@ class GameController extends Controller
     // ==========================================
     public function syncSingleSteamGame(Request $request)
     {
-        $steamId = $request->input('steam_id');
+        $steamId = (string) $request->input('steam_id'); 
         $steamName = $request->input('name');
         $playtime = $request->input('playtime_minutes', 0);
         $userId = $request->user()->id;
