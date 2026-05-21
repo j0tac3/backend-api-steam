@@ -374,12 +374,14 @@ class GameController extends Controller
         }
 
         if (isset($raw['cover']['image_id'])) {
-            $game->media()->create(['type' => 'cover', 'source' => 'igdb', 'path' => $raw['cover']['image_id'], 'is_primary' => true]);
+            // 🔥 Usamos DB::raw('true')
+            $game->media()->create(['type' => 'cover', 'source' => 'igdb', 'path' => $raw['cover']['image_id'], 'is_primary' => DB::raw('true')]);
         }
 
         if (isset($raw['screenshots'])) {
             foreach ($raw['screenshots'] as $screenshot) {
-                $game->media()->create(['type' => 'screenshot', 'source' => 'igdb', 'path' => $screenshot['image_id'], 'is_primary' => false]);
+                // 🔥 Usamos DB::raw('false')
+                $game->media()->create(['type' => 'screenshot', 'source' => 'igdb', 'path' => $screenshot['image_id'], 'is_primary' => DB::raw('false')]);
             }
         }
 
@@ -513,18 +515,19 @@ class GameController extends Controller
                         } else {
                             $localGame->media()->create([
                                 'type' => 'cover', 
-                                'source' => 'igdb', 
-                                'path' => $raw['cover']['image_id'], 
-                                'is_primary' => true
+                                'source' => 'steam', 
+                                'path' => "https://steamcdn-a.akamaihd.net/steam/apps/{$steamId}/library_600x900.jpg", 
+                                'is_primary' => DB::raw('true') // 🔥 Blindado
                             ]);
                         }
                     }
+                    // 📸 GUARDAR CAPTURAS DE IGDB
                     // 📸 GUARDAR CAPTURAS DE IGDB
                     if (isset($raw['screenshots'])) {
                         foreach ($raw['screenshots'] as $screenshot) {
                             $localGame->media()->updateOrCreate(
                                 ['type' => 'screenshot', 'path' => $screenshot['image_id']],
-                                ['source' => 'igdb', 'is_primary' => false]
+                                ['source' => 'igdb', 'is_primary' => DB::raw('false')] // 🔥 Blindado
                             );
                         }
                     }
