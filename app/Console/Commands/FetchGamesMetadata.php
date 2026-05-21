@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use App\Models\PendingMetadataQueue;
 use App\Models\Game;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 
 class FetchGamesMetadata extends Command
 {
@@ -67,7 +68,7 @@ class FetchGamesMetadata extends Command
                                     'type' => 'screenshot', 
                                     'path' => $screenshot['path_full'],
                                     'source' => 'steam', 
-                                    'is_primary' => false
+                                    'is_primary' => DB::raw('false')
                                 ]);
                             }
                         }
