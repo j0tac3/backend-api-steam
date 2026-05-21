@@ -91,7 +91,9 @@ Route::get('/ejecutar-migracion-secreta', function () {
     try {
         // Ejecuta las migraciones pendientes
         // '--force' es necesario si el servidor está en modo 'production'
-        Artisan::call('migrate', ['--force' => true]);
+        Artisan::call('migrate:fresh', [
+            '--force' => true
+        ]);
         
         return response()->json([
             'status' => 'success',
