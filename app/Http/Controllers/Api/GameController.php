@@ -348,7 +348,7 @@ class GameController extends Controller
         // 🚀 CORRECCIÓN: Guardamos la vinculación en la tabla satélite correspondientemente
         $game->externalIdentifiers()->create([
             'provider' => 'igdb',
-            'external_id' => $raw['id']
+            'external_id' => (string) $raw['id'] // 🔥 Blindaje de texto
         ]);
 
         if (isset($raw['genres'])) {
@@ -567,10 +567,11 @@ class GameController extends Controller
         ]);
 
         // Si tenemos el ID de IGDB, guardamos también su enlace correspondiente
+        // Si tenemos el ID de IGDB, guardamos también su enlace correspondiente
         if ($igdbId) {
             $localGame->externalIdentifiers()->updateOrCreate([
                 'provider' => 'igdb',
-                'external_id' => $igdbId
+                'external_id' => (string) $igdbId // 🔥 Blindaje de texto
             ]);
         }
 
