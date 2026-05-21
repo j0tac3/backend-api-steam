@@ -503,7 +503,6 @@ class GameController extends Controller
                         ]
                     );
 
-                    // 🖼️ GUARDAR LA CARÁTULA EN LA TABLA MEDIA
                     // 🖼️ GUARDAR LA CARÁTULA EN LA TABLA MEDIA (Versión Blindada Postgres)
                     if (isset($raw['cover']['image_id'])) {
                         $cover = $localGame->media()
@@ -517,10 +516,11 @@ class GameController extends Controller
                                 'path' => $raw['cover']['image_id']
                             ]);
                         } else {
+                            // 🚀 CORRECCIÓN MÍA: Guardamos los datos de IGDB, no los de Steam
                             $localGame->media()->create([
                                 'type' => 'cover', 
-                                'source' => 'steam', 
-                                'path' => "https://steamcdn-a.akamaihd.net/steam/apps/{$steamId}/library_600x900.jpg", 
+                                'source' => 'igdb', 
+                                'path' => $raw['cover']['image_id'], 
                                 'is_primary' => DB::raw('true') // 🔥 Blindado
                             ]);
                         }
