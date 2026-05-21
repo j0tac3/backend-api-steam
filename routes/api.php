@@ -107,21 +107,28 @@ Route::get('/ejecutar-migracion-secreta', function () {
         ], 500);
     }
 });
+
+
 Route::get('/worker/run', function (Request $request) {
-    // 1. Verificamos el candado de seguridad
+    // 1. Candado de seguridad
     $secret = env('WORKER_SECRET_TOKEN');
     
     if (!$secret || $request->query('token') !== $secret) {
         return response()->json(['error' => 'Acceso denegado. Candado cerrado.'], 401);
     }
 
-    // 2. Despertamos al trabajador
-    // --stop-when-empty: Se vuelve a dormir en cuanto no hay más juegos.
-    // --max-time=50: Evita que Render nos tire el proceso por durar más de 1 minuto.
-    Artisan::call('queue:work', [
-        '--stop-when-empty' => true,
-        '--max-time' => 50,
-    ]);
+    try {
+        // 2. Ejecutar tu comando de metadatos (Asegúrate de que la firma es correcta)
+        Artisan::call('games:fetch-metadata'); 
 
-    return response()->json(['status' => 'Sincronización procesada y trabajador dormido']);
+        return response()->json([
+            'status' => 'Trabajo completado',
+            'output' => Artisan::output() // Te mostrará en texto cuántos juegos procesó
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => 'Hubo un error al ejecutar el comando',
+            'message' => $e->getMessage()
+        ], 500);
+    }
 });
