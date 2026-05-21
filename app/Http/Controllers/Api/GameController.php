@@ -63,10 +63,12 @@ class GameController extends Controller
 
         $paginated->getCollection()->transform(function ($game) use ($userId) {
             $game->has_notes = \App\Models\JournalEntry::where('game_id', $game->id)->where('user_id', $userId)->exists();
-            $game->has_featured_notes = \App\Models\JournalEntry::where('game_id', $game->id)->where('user_id', $userId)->where('is_featured', true)->exists();
+            
+            // 🔥 Blindado con whereRaw para Postgres
+            $game->has_featured_notes = \App\Models\JournalEntry::where('game_id', $game->id)->where('user_id', $userId)->whereRaw('is_featured = true')->exists();
+            
             return $game;
         });
-
         return $paginated;
     }
 
