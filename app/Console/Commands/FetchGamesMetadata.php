@@ -7,6 +7,7 @@ use App\Models\PendingMetadataQueue;
 use App\Models\Game;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
+use App\Services\ImageHashService;
 
 class FetchGamesMetadata extends Command
 {

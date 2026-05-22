@@ -57,6 +57,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // 🔄 Actualizaciones específicas (Tabla Pivote)
     Route::patch('/games/{id}/status', [GameController::class, 'updateStatus']);
     Route::patch('/games/{id}/favorite', [GameController::class, 'toggleFavorite']);
+    Route::patch('/games/{id}/primary-cover', [GameController::class, 'setPrimaryCover']); // 🚀 NUEVA RUTA
 
     // 🌍 Ruta para la Pantalla Descubrir
     Route::get('discover/feed', [DiscoverController::class, 'getDiscoverFeed']);
@@ -81,6 +82,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/stats/advanced', [StatsController::class, 'getAdvancedStats']);
 
     Schedule::command('games:fetch-metadata')->everyMinute()->withoutOverlapping();
+    // Limpiador visual de portadas (Se ejecuta todos los días a las 03:00 AM)
+    Schedule::command('games:clean-covers')->dailyAt('03:00')->withoutOverlapping();
 
     // Logout
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -128,6 +131,31 @@ Route::get('/worker/run', function (Request $request) {
     } catch (\Exception $e) {
         return response()->json([
             'error' => 'Hubo un error al ejecutar el comando',
+            'message' => $e->getMessage()
+        ], 500);
+    }
+});
+
+// EL CONSERJE NOCTURNO: Limpieza de carátulas
+Route::get('/worker/clean-covers', function (Request $request) {
+    // 1. Mismo candado de seguridad que tu otro worker
+    $secret = env('WORKER_SECRET_TOKEN');
+    
+    if (!$secret || $request->query('token') !== $secret) {
+        return response()->json(['error' => 'Acceso denegado. Candado cerrado.'], 401);
+    }
+
+    try {
+        // 2. Ejecutar tu nuevo comando de limpieza
+        \Illuminate\Support\Facades\Artisan::call('games:clean-covers'); 
+
+        return response()->json([
+            'status' => 'Limpieza completada con éxito',
+            'output' => \Illuminate\Support\Facades\Artisan::output() 
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => 'Hubo un error al ejecutar el limpiador',
             'message' => $e->getMessage()
         ], 500);
     }

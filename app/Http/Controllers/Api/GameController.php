@@ -307,14 +307,24 @@ class GameController extends Controller
     {
         $query = $request->query('q');
         $category = $request->query('category', 'todas');
+        $user = $request->user();
 
         if (!$query) return response()->json([]);
         $rawGames = $this->igdbService->searchGames($query, $category);
         if (!is_array($rawGames) || isset($rawGames['message'])) return response()->json([]);
 
-        $cleanGames = collect($rawGames)->map(function ($game) {
+        $userIgdbIds = DB::table('user_games')
+            ->join('game_external_identifiers', 'user_games.game_id', '=', 'game_external_identifiers.game_id')
+            ->where('user_games.user_id', $user->id)
+            ->where('game_external_identifiers.provider', 'igdb')
+            ->pluck('game_external_identifiers.external_id')
+            ->toArray();
+
+        $cleanGames = collect($rawGames)->map(function ($game) use ($userIgdbIds){
             if (!isset($game['id']) || !isset($game['name'])) return null;
             $coverUrl = isset($game['cover']['url']) ? 'https:' . str_replace('t_thumb', 't_cover_big', $game['cover']['url']) : null;
+
+            $igdbIdStr = (string) $game['id'];
 
             return [
                 'external_id' => (string) $game['id'],
@@ -324,6 +334,7 @@ class GameController extends Controller
                 'category'    => $game['category'] ?? 0,
                 'release_year'=> isset($game['first_release_date']) ? date('Y', $game['first_release_date']) : null,
                 'igdb_user_rating' => $game['rating'] ?? null,
+                'in_library'  => in_array($igdbIdStr, $userIgdbIds),
             ];
         })->filter()->values();
 
@@ -488,110 +499,129 @@ class GameController extends Controller
 
         // 🏗️ 3. SI SIGUE SIN EXISTIR, ES UN JUEGO NUEVO (O UN "HUÉRFANO")
         if (!$localGame) {
+            // Datos por defecto basados en lo que nos da Steam
+            $gameData = [
+                'name' => $steamName,
+                'slug' => Str::slug($steamName) . '-steam-' . $steamId
+            ];
+
+            // 🧠 COMPLEMENTO IGDB: Si IGDB lo encontró, enriquecemos los datos base (Sinopsis, Fecha oficial, etc.)
+            $raw = null;
             if ($igdbId) {
                 $igdbDetails = $this->igdbService->getGameDetails($igdbId);
                 if (!empty($igdbDetails)) {
                     $raw = $igdbDetails[0];
-                    $expectedSlug = Str::slug($raw['name']) . '-' . $raw['id'];
-
-                    $localGame = Game::updateOrCreate(
-                        ['slug' => $expectedSlug], 
-                        [
-                            'name' => $raw['name'],
-                            'summary' => isset($raw['summary']) ? $this->translator->translateToSpanish($raw['summary']) : null,
-                            'release_date' => isset($raw['first_release_date']) ? date('Y-m-d', $raw['first_release_date']) : null,
-                        ]
-                    );
-
-                    // 🖼️ GUARDAR LA CARÁTULA EN LA TABLA MEDIA (Versión Blindada Postgres)
-                    if (isset($raw['cover']['image_id'])) {
-                        $cover = $localGame->media()
-                            ->where('type', 'cover')
-                            ->whereRaw('is_primary = true') // 🔥 Evita que Laravel envíe un 1
-                            ->first();
-                        
-                        if ($cover) {
-                            $cover->update([
-                                'source' => 'igdb', 
-                                'path' => $raw['cover']['image_id']
-                            ]);
-                        } else {
-                            // 🚀 CORRECCIÓN MÍA: Guardamos los datos de IGDB, no los de Steam
-                            $localGame->media()->create([
-                                'type' => 'cover', 
-                                'source' => 'igdb', 
-                                'path' => $raw['cover']['image_id'], 
-                                'is_primary' => DB::raw('true') // 🔥 Blindado
-                            ]);
-                        }
-                    }
-                    // 📸 GUARDAR CAPTURAS DE IGDB
-                    // 📸 GUARDAR CAPTURAS DE IGDB
-                    if (isset($raw['screenshots'])) {
-                        foreach ($raw['screenshots'] as $screenshot) {
-                            $localGame->media()->updateOrCreate(
-                                ['type' => 'screenshot', 'path' => $screenshot['image_id']],
-                                ['source' => 'igdb', 'is_primary' => DB::raw('false')] // 🔥 Blindado
-                            );
-                        }
-                    }
-
-                    // 🏷️ GUARDAR LOS GÉNEROS
-                    if (isset($raw['genres'])) {
-                        foreach ($raw['genres'] as $g) {
-                            $genre = Genre::firstOrCreate(['slug' => Str::slug($g['name'])], ['name' => $g['name']]);
-                            $localGame->genres()->syncWithoutDetaching([$genre->id]);
-                        }
-                    }
+                    $gameData['slug'] = Str::slug($raw['name']) . '-' . $raw['id']; // Preferimos el slug oficial relacional
+                    $gameData['name'] = $raw['name'];
+                    $gameData['summary'] = isset($raw['summary']) ? $this->translator->translateToSpanish($raw['summary']) : null;
+                    $gameData['release_date'] = isset($raw['first_release_date']) ? date('Y-m-d', $raw['first_release_date']) : null;
                 }
             }
 
-            // Si IGDB no lo encontró o falló, hacemos el guardado de emergencia de Steam
-            if (!$localGame) {
-                $expectedSlug = Str::slug($steamName) . '-steam-' . $steamId;
-                
-                $localGame = Game::updateOrCreate(
-                    ['slug' => $expectedSlug],
-                    ['name' => $steamName]
-                );
+            // Creamos o actualizamos el registro base del juego de forma limpia
+            $localGame = Game::updateOrCreate(
+                ['slug' => $gameData['slug']], 
+                $gameData
+            );
 
-                // 🖼️ GUARDAR LA CARÁTULA DE STEAM EN LA TABLA MEDIA
-                // 🖼️ GUARDAR LA CARÁTULA DE STEAM EN LA TABLA MEDIA (Versión Blindada Postgres)
-                $steamCover = $localGame->media()
-                    ->where('type', 'cover')
-                    ->whereRaw('is_primary = true') // 🔥 Evita que Laravel envíe un 1 en la búsqueda
-                    ->first();
+            // 🖼️ CARÁTULA PRINCIPAL: HÍBRIDO REAL (IGDB Primero, Steam como salvavidas)
+            // Por defecto preparamos la de Steam
+            // 🖼️ CARÁTULA: MULTI-COVER (IGDB Principal + Steam Secundaria)
+            // Primero, limpiamos las portadas viejas por si resincronizamos un juego existente
+            $localGame->media()->where('type', 'cover')->delete();
+
+            $steamCoverUrl = "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{$steamId}/library_600x900.jpg";
+
+            if (isset($raw['cover']['image_id'])) {
+                // 1. Guardamos IGDB como portada principal (La que se ve en la cuadrícula general)
+                $localGame->media()->create([
+                    'type' => 'cover', 
+                    'source' => 'igdb', 
+                    'path' => $raw['cover']['image_id'], 
+                    'is_primary' => DB::raw('true')
+                ]);
+
+                // 2. Guardamos Steam como portada secundaria (Para el selector alternativo)
+                $localGame->media()->create([
+                    'type' => 'cover', 
+                    'source' => 'steam', 
+                    'path' => $steamCoverUrl, 
+                    'is_primary' => DB::raw('false')
+                ]);
+            } else {
+                // Si IGDB no tiene portada, la de Steam es la única y principal
+                $localGame->media()->create([
+                    'type' => 'cover', 
+                    'source' => 'steam', 
+                    'path' => $steamCoverUrl, 
+                    'is_primary' => DB::raw('true')
+                ]);
+            }
+
+            // 🏷️ GÉNEROS (Complemento enriquecido de IGDB + Traducción ultrarrápida)
+            if (isset($raw['genres']) && is_array($raw['genres'])) {
                 
-                if ($steamCover) {
-                    $steamCover->update([
-                        'source' => 'steam', 
-                        'path' => "https://steamcdn-a.akamaihd.net/steam/apps/{$steamId}/library_600x900.jpg"
-                    ]);
-                } else {
-                    $localGame->media()->create([
-                        'type' => 'cover', 
-                        'source' => 'steam', 
-                        'path' => "https://steamcdn-a.akamaihd.net/steam/apps/{$steamId}/library_600x900.jpg", 
-                        'is_primary' => DB::raw('true') // 🔥 Evita que Laravel envíe un 1 al guardar
-                    ]);
+                // Diccionario instantáneo para no saturar la API de traducción
+                $diccionarioGeneros = [
+                    'Adventure' => 'Aventura',
+                    'Shooter' => 'Shooter',
+                    'Role-playing (RPG)' => 'RPG',
+                    'Simulator' => 'Simulador',
+                    'Racing' => 'Carreras',
+                    'Sport' => 'Deportes',
+                    'Fighting' => 'Lucha',
+                    'Strategy' => 'Estrategia',
+                    'Platform' => 'Plataformas',
+                    'Puzzle' => 'Puzle',
+                    'Indie' => 'Indie',
+                    'Arcade' => 'Arcade',
+                    'Visual Novel' => 'Novela Visual',
+                    'Tactical' => 'Táctico',
+                    'Turn-based strategy (TBS)' => 'Estrategia por turnos',
+                    'Real Time Strategy (RTS)' => 'Estrategia en tiempo real',
+                    'Hack and slash/Beat \'em up' => 'Hack and Slash',
+                    'Point-and-click' => 'Point-and-click'
+                ];
+
+                $genreIds = [];
+                
+                foreach ($raw['genres'] as $g) {
+                    if (isset($g['name'])) {
+                        $nombreOriginal = $g['name'];
+                        // Traducimos usando el diccionario, o dejamos el original si es muy raro
+                        $nombreTraducido = $diccionarioGeneros[$nombreOriginal] ?? $nombreOriginal;
+                        
+                        $genre = Genre::firstOrCreate(
+                            ['slug' => Str::slug($nombreOriginal)], // Slug en inglés para estándar técnico limpio
+                            ['name' => $nombreTraducido]
+                        );
+                        
+                        $genreIds[] = $genre->id;
+                    }
+                }
+                
+                // 🚀 Guardamos TODOS los géneros de golpe en la tabla pivote (1 sola consulta a la BD)
+                if (count($genreIds) > 0) {
+                    $localGame->genres()->syncWithoutDetaching($genreIds);
                 }
             }
         }
 
-        // 📌 4. ASEGURAMOS LOS ENLACES EN LA TABLA SATÉLITE (updateOrCreate evita duplicados)
-        // Guardamos el enlace de Steam
-        $localGame->externalIdentifiers()->updateOrCreate([
-            'provider' => 'steam',
-            'external_id' => $steamId
-        ]);
+        // 📌 4. ASEGURAMOS LOS ENLACES EN LA TABLA SATÉLITE
+        // 🔥 EL GRAN FIX: Separamos el array de búsqueda (primer parámetro) del array de guardado (segundo parámetro)
 
-        // Si tenemos el ID de IGDB, guardamos también su enlace correspondiente
-        // Si tenemos el ID de IGDB, guardamos también su enlace correspondiente
+        // Guardamos o actualizamos el enlace de Steam
+        $localGame->externalIdentifiers()->updateOrCreate(
+            ['provider' => 'steam'],                // 🔍 Busca si ya existe el proveedor 'steam' para este juego
+            ['external_id' => (string) $steamId]    // 💾 Guarda/Actualiza el ID real de Steam
+        );
+
+        // Guardamos o actualizamos el enlace de IGDB
         if ($igdbId) {
-            $localGame->externalIdentifiers()->updateOrCreate([
-                'provider' => 'igdb',
-                'external_id' => (string) $igdbId // 🔥 Blindaje de texto
-            ]);
+            $localGame->externalIdentifiers()->updateOrCreate(
+                ['provider' => 'igdb'],                 // 🔍 Busca si ya existe el proveedor 'igdb' para este juego
+                ['external_id' => (string) $igdbId]     // 💾 Guarda/Actualiza el ID real de IGDB
+            );
         }
 
         // 🎮 5. VINCULACIÓN DE HORAS Y PLATAFORMA
@@ -621,6 +651,26 @@ class GameController extends Controller
                 'cover_url' => "https://steamcdn-a.akamaihd.net/steam/apps/{$steamId}/library_600x900.jpg"
             ]
         ]);
+    }
+
+    // ==========================================
+    // 🖼️ 8. CAMBIAR PORTADA PRINCIPAL
+    // ==========================================
+    public function setPrimaryCover(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'media_id' => 'required|integer'
+        ]);
+
+        $game = Game::findOrFail($id);
+
+        // 1. Apagamos todas las portadas (las pasamos a secundarias)
+        $game->media()->where('type', 'cover')->update(['is_primary' => DB::raw('false')]);
+
+        // 2. Encendemos solo la que el usuario ha elegido
+        $game->media()->where('id', $validated['media_id'])->update(['is_primary' => DB::raw('true')]);
+
+        return response()->json(['message' => 'Portada principal actualizada correctamente']);
     }
 
     // Método auxiliar para no repetir código en el fallback

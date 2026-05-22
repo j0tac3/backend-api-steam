@@ -353,27 +353,52 @@ class IgdbService
     /**
      * 🔌 Función auxiliar para no repetir la llamada HTTP en cada intento
      */
-    private function executeIgdbSearch(string $queryName, string $token)
+    /**
+     * 🕵️‍♂️ Búsqueda difusa por nombre en IGDB con reintentos inteligentes y filtro de popularidad
+     */
+    /**
+     * 🕵️‍♂️ Búsqueda difusa por nombre en IGDB con reintentos inteligentes y filtro de popularidad nativo
+     */
+    private function executeIgdbSearch(string $query, string $token)
     {
-        $query = "search \"{$queryName}\"; fields id, name, category; limit 5;";
+        // 🚀 Limpiamos la consulta: Le pedimos 20 resultados limpios a IGDB sin cláusulas 'where' restrictivas
+        $body = "search \"{$query}\"; fields id, name, category, rating_count; limit 20;";
 
         $response = \Illuminate\Support\Facades\Http::withHeaders([
             'Client-ID' => $this->clientId,
             'Authorization' => 'Bearer ' . $token,
             'Accept' => 'application/json',
-        ])->withBody($query, 'text/plain')->post("{$this->baseUrl}/games");
+        ])->withBody($body, 'text/plain')->post("{$this->baseUrl}/games");
 
-        $data = $response->json();
+        if ($response->successful()) {
+            $data = $response->json();
+            
+            if (is_array($data) && count($data) > 0 && !isset($data['message'])) {
+                
+                // 🛡️ ESCUDO 1: Filtramos en PHP las categorías válidas
+                // 0 (Base), 8 (Remake), 9 (Remaster), 10 (Expandido), 11 (Port)
+                $filtered = array_filter($data, function($game) {
+                    $cat = isset($game['category']) ? (int)$game['category'] : 0;
+                    return in_array($cat, [0, 8, 9, 10, 11]); 
+                });
 
-        if (is_array($data) && count($data) > 0 && !isset($data['message'])) {
-            // Priorizamos juego base, remake o remaster
-            foreach ($data as $game) {
-                if (isset($game['category']) && in_array($game['category'], [0, 8, 9])) {
-                    return $game['id'];
+                if (count($filtered) > 0) {
+                    // 🛡️ ESCUDO 2: Ordenamos en PHP por cantidad de valoraciones (rating_count) de mayor a menor
+                    usort($filtered, function($a, $b) {
+                        $countA = $a['rating_count'] ?? 0;
+                        $countB = $b['rating_count'] ?? 0;
+                        return $countB <=> $countA; // El juego más famoso se coloca primero
+                    });
+
+                    // Reindexamos el array y devolvemos el ID del juego rey indiscutible
+                    $filtered = array_values($filtered);
+                    return $filtered[0]['id'];
                 }
+
+                // Fallback: Si por alguna rareza extrema ningún resultado pasa el filtro, 
+                // devolvemos el primero de la búsqueda original para no romper la sincronización
+                return $data[0]['id'] ?? null;
             }
-            // Si no, cogemos el primer resultado que nos dé
-            return $data[0]['id'] ?? null;
         }
 
         return null;
