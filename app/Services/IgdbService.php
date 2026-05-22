@@ -232,28 +232,64 @@ class IgdbService
      */
     public function getSteamLibrary($steamId64)
     {
+        $steamGames = [];
+
+        // 🟢 FASE 1: LA VÍA LEGAL (API Oficial de Steam)
         $apiKey = env('STEAM_API_KEY');
-        
         $response = \Illuminate\Support\Facades\Http::get("http://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/", [
             'key' => $apiKey,
             'steamid' => $steamId64,
-            'include_appinfo' => true, // 🚨 CAMBIADO A TRUE para que nos traiga los nombres
-            'format' => 'json'
+            'format' => 'json',
+            'include_appinfo' => 1, 
+            'include_played_free_games' => 1, 
+            'include_free_sub' => 1,
+            'skip_unvetted_apps' => 0
         ]);
 
-        $data = $response->json();
-
-        if (!isset($data['response']['games'])) {
-            return [];
+        if ($response->successful() && isset($response->json()['response']['games'])) {
+            foreach ($response->json()['response']['games'] as $game) {
+                $nombreSeguro = isset($game['name']) ? $game['name'] : 'App de Steam (' . $game['appid'] . ')';
+                $steamGames[$game['appid']] = [
+                    'name' => $nombreSeguro,
+                    'playtime' => $game['playtime_forever'] ?? 0
+                ];
+            }
         }
 
-        // Ahora guardamos tanto el nombre como los minutos
-        $steamGames = [];
-        foreach ($data['response']['games'] as $game) {
-            $steamGames[$game['appid']] = [
-                'name' => $game['name'],
-                'playtime' => $game['playtime_forever']
-            ];
+        // 🔴 FASE 2: LA VÍA HACKER (Web Scraping del Perfil Público con CACHÉ ANTI-BANEO)
+        // Guardamos el resultado del scraping durante 12 horas para no saturar a Steam y evitar bloqueos de IP
+        $cacheKey = "steam_scraping_{$steamId64}";
+        
+        $communityGames = \Illuminate\Support\Facades\Cache::remember($cacheKey, now()->addHours(12), function () use ($steamId64) {
+            try {
+                $profileUrl = "https://steamcommunity.com/profiles/{$steamId64}/games/?tab=all";
+                $profileResponse = \Illuminate\Support\Facades\Http::timeout(10)->get($profileUrl);
+                
+                if ($profileResponse->successful()) {
+                    $html = $profileResponse->body();
+                    
+                    if (preg_match('/var rgGames = (\[.*?\]);/s', $html, $matches)) {
+                        $games = json_decode($matches[1], true);
+                        return is_array($games) ? $games : [];
+                    }
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning("Scraping de Steam falló para {$steamId64}: " . $e->getMessage());
+            }
+            return []; // Si falla o Steam nos bloquea, devolvemos vacío para no romper la app
+        });
+
+        // Ahora cruzamos los datos (vengan de la web fresca o de la caché rápida)
+        foreach ($communityGames as $cGame) {
+            $appId = $cGame['appid'];
+            
+            // Si el juego NO estaba en la lista de la API oficial, ¡lo rescatamos!
+            if (!isset($steamGames[$appId])) {
+                $steamGames[$appId] = [
+                    'name' => $cGame['name'] ?? 'Juego Rescatado (' . $appId . ')',
+                    'playtime' => isset($cGame['hours_forever']) ? (int) (str_replace(',', '', $cGame['hours_forever']) * 60) : 0
+                ];
+            }
         }
 
         return $steamGames;
@@ -383,21 +419,48 @@ class IgdbService
                 });
 
                 if (count($filtered) > 0) {
-                    // 🛡️ ESCUDO 2: Ordenamos en PHP por cantidad de valoraciones (rating_count) de mayor a menor
-                    usort($filtered, function($a, $b) {
-                        $countA = $a['rating_count'] ?? 0;
-                        $countB = $b['rating_count'] ?? 0;
-                        return $countB <=> $countA; // El juego más famoso se coloca primero
+                    $queryLower = strtolower(trim($query));
+
+                    // 🚀 NUEVO ESCUDO 1: MATCH EXACTO CON DESEMPATE POR FAMA
+                    // Primero, recogemos TODOS los juegos que se llamen exactamente igual
+                    $exactMatches = array_filter($filtered, function($game) use ($queryLower) {
+                        return strtolower(trim($game['name'])) === $queryLower;
                     });
 
-                    // Reindexamos el array y devolvemos el ID del juego rey indiscutible
-                    $filtered = array_values($filtered);
-                    return $filtered[0]['id'];
+                    // Si hemos encontrado al menos una coincidencia exacta
+                    if (count($exactMatches) > 0) {
+                        // Los ordenamos por número de valoraciones de mayor a menor
+                        usort($exactMatches, function($a, $b) {
+                            $countA = $a['rating_count'] ?? 0;
+                            $countB = $b['rating_count'] ?? 0;
+                            return $countB <=> $countA;
+                        });
+                        
+                        // Devolvemos el ganador indiscutible (el más famoso)
+                        return array_values($exactMatches)[0]['id'];
+                    }
+
+                    // 🚀 ESCUDO 2: SIMILITUD ESTRICTA (Por si el nombre no era exacto)
+                    $validMatches = array_filter($filtered, function($game) use ($queryLower) {
+                        $gameName = strtolower(trim($game['name']));
+                        similar_text($queryLower, $gameName, $percent);
+                        return $percent > 60 || str_contains($gameName, $queryLower);
+                    });
+
+                    if (count($validMatches) > 0) {
+                        usort($validMatches, function($a, $b) {
+                            $countA = $a['rating_count'] ?? 0;
+                            $countB = $b['rating_count'] ?? 0;
+                            return $countB <=> $countA;
+                        });
+                        return array_values($validMatches)[0]['id'];
+                    }
+                    
+                    return null;
                 }
 
-                // Fallback: Si por alguna rareza extrema ningún resultado pasa el filtro, 
-                // devolvemos el primero de la búsqueda original para no romper la sincronización
-                return $data[0]['id'] ?? null;
+                // Fallback: Si IGDB devuelve cosas pero ninguna es un juego válido, ignoramos
+                return null;
             }
         }
 

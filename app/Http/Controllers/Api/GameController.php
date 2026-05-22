@@ -524,13 +524,9 @@ class GameController extends Controller
                 $gameData
             );
 
-            // 🖼️ CARÁTULA PRINCIPAL: HÍBRIDO REAL (IGDB Primero, Steam como salvavidas)
-            // Por defecto preparamos la de Steam
             // 🖼️ CARÁTULA: MULTI-COVER (IGDB Principal + Steam Secundaria)
             // Primero, limpiamos las portadas viejas por si resincronizamos un juego existente
             $localGame->media()->where('type', 'cover')->delete();
-
-            $steamCoverUrl = "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{$steamId}/library_600x900.jpg";
 
             if (isset($raw['cover']['image_id'])) {
                 // 1. Guardamos IGDB como portada principal (La que se ve en la cuadrícula general)
@@ -541,19 +537,22 @@ class GameController extends Controller
                     'is_primary' => DB::raw('true')
                 ]);
 
-                // 2. Guardamos Steam como portada secundaria (Para el selector alternativo)
+                // 2. Guardamos Steam como portada secundaria (Usamos la ruta teórica estándar para no ralentizar el servidor)
                 $localGame->media()->create([
                     'type' => 'cover', 
                     'source' => 'steam', 
-                    'path' => $steamCoverUrl, 
+                    'path' => "https://steamcdn-a.akamaihd.net/steam/apps/{$steamId}/library_600x900.jpg", 
                     'is_primary' => DB::raw('false')
                 ]);
             } else {
-                // Si IGDB no tiene portada, la de Steam es la única y principal
+                // 🚨 EMERGENCIA: IGDB no tiene portada o no existe el juego en IGDB (Ej: Playtests).
+                // Aquí llamamos a nuestro Juez para verificar qué portada tiene Steam realmente y evitar imágenes rotas.
+                $mejorCaratulaSteam = $this->resolveSteamCover($steamId);
+
                 $localGame->media()->create([
                     'type' => 'cover', 
                     'source' => 'steam', 
-                    'path' => $steamCoverUrl, 
+                    'path' => $mejorCaratulaSteam, 
                     'is_primary' => DB::raw('true')
                 ]);
             }
@@ -606,49 +605,69 @@ class GameController extends Controller
                 }
             }
         }
-
+        
         // 📌 4. ASEGURAMOS LOS ENLACES EN LA TABLA SATÉLITE
-        // 🔥 EL GRAN FIX: Separamos el array de búsqueda (primer parámetro) del array de guardado (segundo parámetro)
+        // 🔥 FIX: Usamos firstOrCreate con ambos campos para permitir que 
+        // si Steam envía un Juego Base y un Playtest, nuestra tarjeta guarde AMBOS IDs sin sobrescribirse.
+        $localGame->externalIdentifiers()->firstOrCreate([
+            'provider' => 'steam',
+            'external_id' => (string) $steamId
+        ]);
 
-        // Guardamos o actualizamos el enlace de Steam
-        $localGame->externalIdentifiers()->updateOrCreate(
-            ['provider' => 'steam'],                // 🔍 Busca si ya existe el proveedor 'steam' para este juego
-            ['external_id' => (string) $steamId]    // 💾 Guarda/Actualiza el ID real de Steam
-        );
-
-        // Guardamos o actualizamos el enlace de IGDB
         if ($igdbId) {
-            $localGame->externalIdentifiers()->updateOrCreate(
-                ['provider' => 'igdb'],                 // 🔍 Busca si ya existe el proveedor 'igdb' para este juego
-                ['external_id' => (string) $igdbId]     // 💾 Guarda/Actualiza el ID real de IGDB
-            );
+            $localGame->externalIdentifiers()->firstOrCreate([
+                'provider' => 'igdb',
+                'external_id' => (string) $igdbId
+            ]);
         }
 
         // 🎮 5. VINCULACIÓN DE HORAS Y PLATAFORMA
         $platformPc = Platform::firstOrCreate(['slug' => 'pc'], ['name' => 'PC', 'family' => 'pc']);
         
-        // 👉 AÑADE ESTA LÍNEA: Vinculamos la plataforma al juego general para que Angular no explote
         $localGame->platforms()->syncWithoutDetaching([$platformPc->id]);
 
-        UserGame::updateOrCreate(
+        // 🔥 EL SALVAVIDAS DE DATOS: 
+        // Usamos firstOrCreate para crear la relación SOLO si no existe, 
+        // protegiendo así tus favoritos y estados de completado.
+        $userGame = UserGame::firstOrCreate(
             ['user_id' => $userId, 'game_id' => $localGame->id, 'platform_id' => $platformPc->id],
-            ['status' => 'jugando', 'playtime_minutes' => $playtime, 'personal_rating' => 0, 'is_favorite' => DB::raw('false')] // 🔥 Blindado
+            ['status' => 'pendiente', 'playtime_minutes' => 0, 'personal_rating' => 0, 'is_favorite' => false]
         );
+
+        // Actualizamos ÚNICAMENTE las horas que nos manda Steam
+        $userGame->playtime_minutes = $playtime;
+        
+        // Si el juego acaba de ser descubierto y tiene horas registradas, lo pasamos a jugando
+        if ($userGame->wasRecentlyCreated && $playtime > 0) {
+            $userGame->status = 'jugando';
+        }
+        
+        $userGame->save();
 
         // 🤖 6. A LA COLA DEL MOTOR EN SEGUNDO PLANO
-        PendingMetadataQueue::updateOrCreate(
+        // Usamos firstOrCreate para que si el juego ya está en la cola (o ya fue procesado),
+        // no le machaque el estado ni reinicie los intentos a 0 en cada sincronización.
+        PendingMetadataQueue::firstOrCreate(
             ['game_id' => $localGame->id],
-            ['external_id' => $steamId, 'platform' => 'SteamStore', 'status' => 'pending', 'attempts' => 0]
+            [
+                'external_id' => $steamId, 
+                'platform'    => 'SteamStore', 
+                'status'      => 'pending', 
+                'attempts'    => 0
+            ]
         );
 
+        // 🚀 7. RECUPERAMOS LA PORTADA FINAL PARA ENVIARLA AL FRONTEND
+        $primaryCover = $localGame->media()->where('type', 'cover')->where('is_primary', true)->first();
+        $finalCoverUrl = $primaryCover ? $primaryCover->path : "https://steamcdn-a.akamaihd.net/steam/apps/{$steamId}/library_600x900.jpg";
+
         // Devolvemos la respuesta limpia para la carátula instantánea de la PWA
-        // Nota: puedes usar una lógica para cover_url dinámica o guardarla temporalmente.
         return response()->json([
             'success' => true,
             'game' => [
                 'id' => $localGame->id,
                 'title' => $localGame->name,
-                'cover_url' => "https://steamcdn-a.akamaihd.net/steam/apps/{$steamId}/library_600x900.jpg"
+                'cover_url' => $finalCoverUrl
             ]
         ]);
     }
@@ -685,5 +704,34 @@ class GameController extends Controller
                 'family' => 'PC',
             ]
         );
+    }
+
+    /**
+     * Resuelve la mejor portada de Steam disponible cuando IGDB no encuentra el juego.
+     * Prioriza la vertical, si no existe, usa la horizontal (header.jpg).
+     */
+    /**
+     * Resuelve la mejor portada de Steam disponible cuando IGDB no encuentra el juego.
+     * Prioriza la vertical, si no existe, usa la horizontal (header.jpg).
+     */
+    private function resolveSteamCover($steamId): string
+    {
+        // 1. Construimos las rutas universales predecibles de Steam (¡Dominio Akamai corregido!)
+        $verticalUrl = "https://steamcdn-a.akamaihd.net/steam/apps/{$steamId}/library_600x900.jpg";
+        $horizontalUrl = "https://cdn.akamai.steamstatic.com/steam/apps/{$steamId}/header.jpg"; // 🔥 AQUÍ ESTABA EL ERROR
+
+        // 2. Escáner ultrarrápido (HTTP HEAD)
+        try {
+            $imageCheck = \Illuminate\Support\Facades\Http::timeout(3)->head($verticalUrl);
+            
+            if ($imageCheck->successful()) {
+                return $verticalUrl; // ¡Bingo! Tiene carátula vertical.
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning("Fallo al comprobar cover vertical para Steam ID: {$steamId}");
+        }
+
+        // 3. Fallback: Si no hay vertical o la conexión falló, devolvemos la horizontal.
+        return $horizontalUrl;
     }
 }
