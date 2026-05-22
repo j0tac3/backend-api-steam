@@ -707,20 +707,14 @@ class GameController extends Controller
     }
 
     /**
-     * Resuelve la mejor portada de Steam disponible cuando IGDB no encuentra el juego.
-     * Prioriza la vertical, si no existe, usa la horizontal (header.jpg).
-     */
-    /**
-     * Resuelve la mejor portada de Steam disponible cuando IGDB no encuentra el juego.
-     * Prioriza la vertical, si no existe, usa la horizontal (header.jpg).
+     * Resuelve la mejor portada de Steam disponible.
+     * Si la vertical predecible falla, extrae la URL exacta (con Hash) de la API de Steam.
      */
     private function resolveSteamCover($steamId): string
     {
-        // 1. Construimos las rutas universales predecibles de Steam (¡Dominio Akamai corregido!)
-        $verticalUrl = "https://steamcdn-a.akamaihd.net/steam/apps/{$steamId}/library_600x900.jpg";
-        $horizontalUrl = "https://cdn.akamai.steamstatic.com/steam/apps/{$steamId}/header.jpg"; // 🔥 AQUÍ ESTABA EL ERROR
+        // 1. Intentamos la vertical predecible primero (Funciona para el 90% de los juegos)
+        $verticalUrl = "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{$steamId}/library_600x900.jpg";
 
-        // 2. Escáner ultrarrápido (HTTP HEAD)
         try {
             $imageCheck = \Illuminate\Support\Facades\Http::timeout(3)->head($verticalUrl);
             
@@ -728,10 +722,34 @@ class GameController extends Controller
                 return $verticalUrl; // ¡Bingo! Tiene carátula vertical.
             }
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::warning("Fallo al comprobar cover vertical para Steam ID: {$steamId}");
+            // Ignoramos el error y pasamos al plan maestro
         }
 
-        // 3. Fallback: Si no hay vertical o la conexión falló, devolvemos la horizontal.
-        return $horizontalUrl;
+        // 2. 🚀 PLAN MAESTRO: Si no hay vertical (Ej: Playtests nuevos que exigen Hash)
+        // Consultamos la API pública de la tienda de Steam para que nos dé la URL exacta.
+        try {
+            $response = \Illuminate\Support\Facades\Http::timeout(4)->get("https://store.steampowered.com/api/appdetails", [
+                'appids' => $steamId
+            ]);
+            
+            if ($response->successful()) {
+                $data = $response->json();
+                
+                // Verificamos que Steam haya encontrado el juego y devuelto éxito
+                if (isset($data[$steamId]['success']) && $data[$steamId]['success'] === true) {
+                    $gameData = $data[$steamId]['data'];
+                    
+                    // Aquí Steam nos regala la URL exacta con el dominio de Fastly y el Hash correcto
+                    if (isset($gameData['header_image'])) {
+                        return $gameData['header_image'];
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning("Fallo al contactar API de Steam para ID: {$steamId}");
+        }
+
+        // 3. Fallback desesperado (Si hasta la API de Steam se cae, usamos la URL base limpia)
+        return "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{$steamId}/header.jpg";
     }
 }
