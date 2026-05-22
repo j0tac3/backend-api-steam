@@ -1,15 +1,19 @@
 # 1. CAMBIO CRÍTICO: Usamos php:8.3 en lugar de 8.2
 FROM php:8.3-apache
 
-# Instalar dependencias del sistema indispensables
+# Instalar dependencias del sistema indispensables (AHORA INCLUYE LAS GRÁFICAS PARA GD)
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     libicu-dev \
     libzip-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
     zip \
     unzip \
     git \
-    && docker-php-ext-install pdo pdo_pgsql intl zip
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install pdo pdo_pgsql intl zip gd
 
 # 2. Configurar Apache
 ENV APACHE_DOCUMENT_ROOT /var/www/html/public
