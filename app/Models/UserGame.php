@@ -9,12 +9,14 @@ class UserGame extends Model
 {
     protected $fillable = [
         'user_id', 'game_id', 'platform_id', 'store_id', 
-        'status', 'playtime_minutes', 'is_favorite', 'personal_rating'
+        'status', 'playtime_minutes', 'is_favorite', 'personal_rating',
+        'last_achievement_sync'
     ];
 
     protected $casts = [
         'is_favorite' => 'boolean',
         'playtime_minutes' => 'integer',
+        'last_achievement_sync' => 'datetime'
     ];
 
     public function user(): BelongsTo { return $this->belongsTo(User::class); }

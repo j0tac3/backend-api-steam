@@ -47,4 +47,10 @@ class Game extends Model
     {
         return $this->hasMany(GameExternalIdentifier::class);
     }
+
+    // 🔗 Relación: Un juego tiene muchos logros
+    public function achievements()
+    {
+        return $this->hasMany(GameAchievement::class);
+    }
 }

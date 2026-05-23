@@ -78,6 +78,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/journal/{id}', [JournalEntryController::class, 'update']);
     Route::delete('/journal/{id}', [JournalEntryController::class, 'destroy']);
 
+    // Rutas de Juegos
+    Route::get('/games/{id}/achievements', [GameController::class, 'getAchievements']);
+
     // 📊 Ruta para el Dashboard Analítico
     Route::get('/stats/advanced', [StatsController::class, 'getAdvancedStats']);
 

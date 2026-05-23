@@ -23,6 +23,7 @@ return new class extends Migration
             $table->integer('playtime_minutes')->default(0);
             $table->boolean('is_favorite')->default(false);
             $table->integer('personal_rating')->default(0);
+            $table->timestamp('last_achievement_sync')->nullable();
             
             $table->timestamps();
             

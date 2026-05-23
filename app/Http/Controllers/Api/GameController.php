@@ -15,6 +15,9 @@ use App\Services\HowLongToBeatService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use App\Models\PendingMetadataQueue;
+use App\Services\SteamService;
+use App\Models\GameAchievement;
+use App\Models\UserAchievement;
 
 class GameController extends Controller
 {
@@ -765,5 +768,73 @@ class GameController extends Controller
 
         // 3. Fallback desesperado (Si hasta la API de Steam se cae, usamos la URL base limpia)
         return "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{$steamId}/header.jpg";
+    }
+
+    /**
+     * Obtiene los logros de un juego usando el "Pase VIP" (Caché On-Demand)
+     */
+    public function getAchievements($id, Request $request, SteamService $steamService)
+    {
+        $user = auth()->user();
+        $game = Game::findOrFail($id);
+        
+        $userGame = UserGame::where('user_id', $user->id)->where('game_id', $game->id)->first();
+
+        if (!$userGame) {
+            return response()->json(['error' => 'El juego no está en tu biblioteca'], 404);
+        }
+
+        $needsUpdate = is_null($userGame->last_achievement_sync) || 
+                       $userGame->last_achievement_sync->diffInHours(now()) >= 12;
+
+        $userSteamId = $user->steam_id ?? $request->query('steam_id'); 
+        
+        $steamIdentifier = \DB::table('game_external_identifiers')
+                                ->where('game_id', $game->id)
+                                ->where('provider', 'steam')
+                                ->first();
+                                
+        $steamAppId = $steamIdentifier ? $steamIdentifier->external_id : null;
+
+        // Si toca actualizar y el juego es de Steam, sincronizamos
+        if ($needsUpdate && $steamAppId) {
+            $steamService->syncGameAchievements($user, $game, (string) $steamAppId, $userSteamId);
+        }
+
+        // Recuperar los logros optimizados usando Eloquent (Eager Loading)
+        $achievements = $game->achievements()->with(['userAchievements' => function($query) use ($user) {
+            $query->where('user_id', $user->id);
+        }])->get();
+
+        $mappedAchievements = $achievements->map(function ($ach) {
+            $unlockedPivot = $ach->userAchievements->first(); 
+            
+            return [
+                'id'            => $ach->id,
+                'name'          => $ach->name,
+                'description'   => $ach->description,
+                'icon_url'      => $ach->icon_url,
+                'icon_gray_url' => $ach->icon_gray_url,
+                'is_hidden'     => $ach->is_hidden,
+                'unlocked'      => $unlockedPivot ? true : false,
+                'unlocked_at'   => $unlockedPivot && $unlockedPivot->unlocked_at 
+                                    ? $unlockedPivot->unlocked_at->format('d/m/Y H:i') 
+                                    : null,
+            ];
+        });
+
+        $total = $mappedAchievements->count();
+        $unlockedCount = $mappedAchievements->where('unlocked', true)->count();
+        $percentage = $total > 0 ? round(($unlockedCount / $total) * 100) : 0;
+
+        return response()->json([
+            'is_supported' => $steamAppId ? true : false, 
+            'stats' => [
+                'total'      => $total,
+                'unlocked'   => $unlockedCount,
+                'percentage' => $percentage
+            ],
+            'achievements' => $mappedAchievements->sortByDesc('unlocked')->values() 
+        ]);
     }
 }

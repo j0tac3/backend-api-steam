@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\JournalEntry;
 use App\Models\Game; 
+use Illuminate\Support\Facades\DB;
+
 
 class JournalEntryController extends Controller
 {
@@ -33,7 +35,7 @@ class JournalEntryController extends Controller
     {
         $request->validate(['content' => 'required|string']);
         
-        // 🚀 ACTUALIZADO: Verificamos propiedad del juego usando 'inventory()'
+        // 🚀 Verificamos propiedad del juego usando 'inventory()'
         $hasGame = $request->user()->inventory()->where('game_id', $gameId)->exists();
         if (!$hasGame) {
             return response()->json(['message' => 'No puedes añadir notas a un juego que no tienes'], 403);
@@ -44,8 +46,12 @@ class JournalEntryController extends Controller
             'user_id' => $request->user()->id,
             'game_id' => $gameId,
             'content' => $request->content,
-            'is_featured' => false
+            'is_featured' => \Illuminate\Support\Facades\DB::raw('false') // Satisface a PostgreSQL
         ]);
+
+        // 🚀 EL FIX PARA ANGULAR:
+        // Forzamos que la copia en memoria tenga el booleano false puro para el JSON
+        $entry->is_featured = false;
 
         return response()->json($entry, 201);
     }
