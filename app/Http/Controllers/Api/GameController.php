@@ -57,7 +57,11 @@ class GameController extends Controller
             $gamesQuery->whereRaw('LOWER(name) LIKE ?', ['%' . strtolower($search) . '%']);
         }
 
-        $gamesQuery->orderByRaw("(SELECT MAX(updated_at) FROM user_games WHERE user_games.game_id = games.id AND user_games.user_id = {$userId}) DESC");
+        // 🚀 FILTRO HÍBRIDO 1: Primero por horas jugadas (De mayor a menor)
+        $gamesQuery->orderByRaw("(SELECT MAX(playtime_minutes) FROM user_games WHERE user_games.game_id = games.id AND user_games.user_id = {$userId}) DESC");
+        
+        // 🚀 FILTRO HÍBRIDO 2: Desempate alfabético de la A a la Z (Para juegos con 0 horas)
+        $gamesQuery->orderBy('name', 'asc');
 
         $paginated = $gamesQuery->paginate(20);
 
@@ -295,7 +299,9 @@ class GameController extends Controller
         ->whereHas('inventoryEntries', function($q) use ($user) {
             $q->where('user_id', $user->id);
         })
-        ->orderByRaw("(SELECT MAX(updated_at) FROM user_games WHERE user_games.game_id = games.id AND user_games.user_id = {$user->id}) DESC")
+        // 🚀 FILTRO HÍBRIDO PARA EL PERFIL PÚBLICO
+        ->orderByRaw("(SELECT MAX(playtime_minutes) FROM user_games WHERE user_games.game_id = games.id AND user_games.user_id = {$user->id}) DESC")
+        ->orderBy('name', 'asc')
         ->get();
 
         return response()->json([
