@@ -37,6 +37,7 @@ class SteamService
             return false;
         }
 
+        $isHidden = (isset($achData['hidden']) && $achData['hidden'] == 1) ? 'true' : 'false';
         $achievementMap = []; 
         foreach ($schema as $achData) {
             $gameAchievement = GameAchievement::updateOrCreate(
@@ -49,7 +50,7 @@ class SteamService
                     'description'   => $achData['description'] ?? null,
                     'icon_url'      => $achData['icon'] ?? null,
                     'icon_gray_url' => $achData['icongray'] ?? null,
-                    'is_hidden'     => isset($achData['hidden']) && $achData['hidden'] == 1
+                    'is_hidden'     => DB::raw($isHidden)
                 ]
             );
             $achievementMap[$achData['name']] = $gameAchievement->id;
