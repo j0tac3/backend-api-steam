@@ -143,9 +143,11 @@ class GameController extends Controller
         if ($entries->isEmpty()) return response()->json(['message' => 'Juego no encontrado'], 404);
         
         $newStatus = !$entries->first()->is_favorite;
-        UserGame::where('user_id', $request->user()->id)->where('game_id', $id)->update(['is_favorite' => $newStatus]);
+        UserGame::where('user_id', $request->user()->id)
+                        ->where('game_id', $id)
+                        ->update(['is_favorite' => DB::raw($newStatus)]);
 
-        return response()->json(['is_favorite' => $newStatus]);
+        return response()->json(['is_favorite' => DB::raw($newStatus)]);
     }
 
     public function destroy(Request $request, $id)
