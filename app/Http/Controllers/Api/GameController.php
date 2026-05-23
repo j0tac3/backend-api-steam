@@ -101,7 +101,7 @@ class GameController extends Controller
         foreach ($validated['platform_ids'] as $platId) {
             $entry = UserGame::firstOrCreate(
                 ['user_id' => $user->id, 'game_id' => $game->id, 'platform_id' => $platId],
-                ['status' => $validated['status'], 'personal_rating' => 0, 'is_favorite' => DB::raw('false'), 'playtime_minutes' => 0] // 🔥 Blindado
+                ['status' => $validated['status'], 'personal_rating' => 0, 'is_favorite' => DB::raw('false'), 'playtime_minutes' => 0]
             );
             if ($entry->wasRecentlyCreated) $addedCount++;
         }
@@ -631,7 +631,7 @@ class GameController extends Controller
         // protegiendo así tus favoritos y estados de completado.
         $userGame = UserGame::firstOrCreate(
             ['user_id' => $userId, 'game_id' => $localGame->id, 'platform_id' => $platformPc->id],
-            ['status' => 'pendiente', 'playtime_minutes' => 0, 'personal_rating' => 0, 'is_favorite' => false]
+            ['status' => 'pendiente', 'playtime_minutes' => 0, 'personal_rating' => 0, 'is_favorite' => DB::raw('false')]
         );
 
         // Actualizamos ÚNICAMENTE las horas que nos manda Steam
