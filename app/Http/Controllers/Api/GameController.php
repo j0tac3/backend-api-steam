@@ -658,7 +658,7 @@ class GameController extends Controller
         );
 
         // 🚀 7. RECUPERAMOS LA PORTADA FINAL PARA ENVIARLA AL FRONTEND
-        $primaryCover = $localGame->media()->where('type', 'cover')->where('is_primary', true)->first();
+        $primaryCover = $localGame->media()->where('type', 'cover')->where('is_primary', DB::raw('true'))->first();
         $finalCoverUrl = $primaryCover ? $primaryCover->path : "https://steamcdn-a.akamaihd.net/steam/apps/{$steamId}/library_600x900.jpg";
 
         // Devolvemos la respuesta limpia para la carátula instantánea de la PWA
