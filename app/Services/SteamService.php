@@ -10,6 +10,7 @@ use App\Models\GameAchievement;
 use App\Models\UserAchievement;
 use App\Models\UserGame;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB; // 🚀 VITAL PARA POSTGRESQL
 
 class SteamService
 {
@@ -20,26 +21,27 @@ class SteamService
         $this->apiKey = env('STEAM_API_KEY');
     }
 
-    /**
-     * El "Director de Orquesta". Llama a los endpoints y guarda los datos.
-     */
     public function syncGameAchievements(User $user, Game $game, string $steamAppId, ?string $userSteamId = null)
     {
         if (!$this->apiKey) {
-            Log::error("Falta la STEAM_API_KEY en el archivo .env");
+            Log::error("SteamService: Falta la STEAM_API_KEY en el archivo .env de Producción.");
             return false;
         }
 
         // 1. Descargar la "Plantilla"
         $schema = $this->fetchGameSchema($steamAppId);
         
-        if (!$schema) {
+        // 🚀 EL FIX AUTO-SANADOR: Si $schema es null (error de red o API caída), abortamos 
+        // SIN actualizar la caché. Así lo volverá a intentar la próxima vez que abras el modal.
+        if ($schema === null) {
             return false;
         }
 
-        $isHidden = (isset($achData['hidden']) && $achData['hidden'] == 1) ? 'true' : 'false';
         $achievementMap = []; 
         foreach ($schema as $achData) {
+            // 🚀 BLINDAJE POSTGRESQL ABSOLUTO (Texto literal para el motor SQL)
+            $postgresBoolean = (!empty($achData['hidden']) && $achData['hidden'] == 1) ? 'true' : 'false';
+
             $gameAchievement = GameAchievement::updateOrCreate(
                 [
                     'game_id'  => $game->id,
@@ -50,13 +52,13 @@ class SteamService
                     'description'   => $achData['description'] ?? null,
                     'icon_url'      => $achData['icon'] ?? null,
                     'icon_gray_url' => $achData['icongray'] ?? null,
-                    'is_hidden'     => DB::raw($isHidden)
+                    'is_hidden'     => DB::raw($postgresBoolean)
                 ]
             );
             $achievementMap[$achData['name']] = $gameAchievement->id;
         }
 
-        // 2. Descargar el "Progreso" (Si tenemos el Steam ID del jugador)
+        // 2. Descargar el "Progreso" (Si el perfil no es privado)
         if ($userSteamId) {
             $playerProgress = $this->fetchPlayerAchievements($userSteamId, $steamAppId);
 
@@ -77,7 +79,7 @@ class SteamService
             }
         }
 
-        // 3. Actualizar Caché
+        // 3. Actualizar Caché (Solo llegamos aquí si Steam respondió correctamente)
         UserGame::where('user_id', $user->id)
                 ->where('game_id', $game->id)
                 ->update(['last_achievement_sync' => now()]);
@@ -96,12 +98,14 @@ class SteamService
 
             if ($response->successful()) {
                 $data = $response->json();
-                return $data['game']['availableGameStats']['achievements'] ?? null;
+                // 🚀 Devuelve array vacío [] si el juego simplemente no tiene logros creados por el desarrollador
+                return $data['game']['availableGameStats']['achievements'] ?? [];
             }
+            Log::warning("SteamService HTTP Error: {$response->status()} para el juego {$appId}");
         } catch (\Exception $e) {
-            Log::warning("Error Schema Steam: " . $e->getMessage());
+            Log::error("SteamService Exception: " . $e->getMessage());
         }
-        return null;
+        return null; // Null significa "Fallo de comunicación real"
     }
 
     private function fetchPlayerAchievements(string $steamId, string $appId)
@@ -116,11 +120,11 @@ class SteamService
 
             if ($response->successful()) {
                 $data = $response->json();
-                return $data['playerstats']['achievements'] ?? null;
+                return $data['playerstats']['achievements'] ?? [];
             }
         } catch (\Exception $e) {
-            Log::info("No progreso para SteamID {$steamId}");
+            // Falla silenciosamente si el perfil de Steam es privado o nunca jugó
         }
-        return null;
+        return [];
     }
 }

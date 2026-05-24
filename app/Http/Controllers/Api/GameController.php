@@ -773,6 +773,9 @@ class GameController extends Controller
     /**
      * Obtiene los logros de un juego usando el "Pase VIP" (Caché On-Demand)
      */
+    /**
+     * Obtiene los logros de un juego usando el "Pase VIP" (Caché On-Demand)
+     */
     public function getAchievements($id, Request $request, SteamService $steamService)
     {
         $user = auth()->user();
@@ -815,7 +818,8 @@ class GameController extends Controller
                 'description'   => $ach->description,
                 'icon_url'      => $ach->icon_url,
                 'icon_gray_url' => $ach->icon_gray_url,
-                'is_hidden'     => $ach->is_hidden,
+                // 🚀 BLINDAJE PARA ANGULAR: filter_var convierte 'true', 'false', 1 o 0 en un booleano real nativo
+                'is_hidden'     => filter_var($ach->is_hidden, FILTER_VALIDATE_BOOLEAN),
                 'unlocked'      => $unlockedPivot ? true : false,
                 'unlocked_at'   => $unlockedPivot && $unlockedPivot->unlocked_at 
                                     ? $unlockedPivot->unlocked_at->format('d/m/Y H:i') 
