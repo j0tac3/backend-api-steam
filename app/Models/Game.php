@@ -53,4 +53,9 @@ class Game extends Model
     {
         return $this->hasMany(GameAchievement::class);
     }
+
+    public function steamRating()
+    {
+        return $this->hasOne(SteamRating::class);
+    }
 }

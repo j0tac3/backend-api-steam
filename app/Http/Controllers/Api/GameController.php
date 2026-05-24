@@ -184,9 +184,9 @@ class GameController extends Controller
         $user = $request->user();
 
         if ($source === 'igdb') {
-            $localGame = Game::with(['genres', 'platforms', 'media', 'stores', 'dlcs.media'])
+            // 🚀 FIX: Añadimos 'steamRating' al final del array
+            $localGame = Game::with(['genres', 'platforms', 'media', 'stores', 'dlcs.media', 'steamRating'])
                         ->whereHas('externalIdentifiers', function($q) use ($id) {
-                            // 🔥 Añadimos (string) a $id
                             $q->where('provider', 'igdb')->where('external_id', (string) $id);
                         })->first();
 
@@ -252,7 +252,7 @@ class GameController extends Controller
         }
 
         // Si source no es igdb, busca directamente por la Clave Primaria local de tu BBDD
-        $game = Game::with(['genres', 'platforms', 'media', 'stores', 'dlcs.media'])->findOrFail($id);
+        $game = Game::with(['genres', 'platforms', 'media', 'stores', 'dlcs.media', 'steamRating'])->findOrFail($id);
         $game->setAttribute('screenshots', $this->buildScreenshotsUrls($game->media));
         $myVersions = UserGame::where('user_id', $user->id)->where('game_id', $game->id)->get();
 

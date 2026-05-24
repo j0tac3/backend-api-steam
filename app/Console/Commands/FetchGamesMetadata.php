@@ -60,6 +60,37 @@ class FetchGamesMetadata extends Command
                         if (isset($steamData['metacritic']['score'])) {
                             $game->metacritic_score = $steamData['metacritic']['score'];
                         }
+
+                        // 🚀 GUARDAR NOTA DE METACRITIC (Si Steam la tiene)
+                        if (isset($steamData['metacritic']['score'])) {
+                            $game->metacritic_score = $steamData['metacritic']['score'];
+                        }
+
+                        // ⭐ NUEVO: OBTENER RESEÑAS DE STEAM Y GUARDAR EN LA TABLA SATÉLITE
+                        try {
+                            $reviewsResponse = Http::get("https://store.steampowered.com/appreviews/{$queueItem->external_id}?json=1&language=spanish&purchase_type=all&num_per_page=0");
+                            
+                            if ($reviewsResponse->successful() && isset($reviewsResponse->json()['query_summary'])) {
+                                $summary = $reviewsResponse->json()['query_summary'];
+                                
+                                // Nos aseguramos de que haya votos para no dividir entre cero
+                                if (isset($summary['total_reviews']) && $summary['total_reviews'] > 0) {
+                                    // Regla de 3 para sacar el porcentaje exacto (0-100)
+                                    $scorePercentage = round(($summary['total_positive'] / $summary['total_reviews']) * 100);
+                                    
+                                    // Creamos o actualizamos el satélite en la nueva tabla
+                                    $game->steamRating()->updateOrCreate(
+                                        ['game_id' => $game->id],
+                                        [
+                                            'score'   => $scorePercentage,
+                                            'summary' => $summary['review_score_desc']
+                                        ]
+                                    );
+                                }
+                            }
+                        } catch (\Exception $e) {
+                            $this->error("Fallo al obtener reseñas de Steam: " . $e->getMessage());
+                        }
                         
                         // Aquí puedes añadir en el futuro la lógica para guardar géneros, capturas, etc.
                         // 📸 GUARDAR CAPTURAS DE STEAM (Opción B: El Reemplazo)
