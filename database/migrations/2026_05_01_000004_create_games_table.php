@@ -20,6 +20,7 @@ return new class extends Migration
             $table->date('release_date')->nullable();
             $table->decimal('rating', 5, 2)->nullable();
             $table->decimal('igdb_user_rating', 5, 2)->nullable();
+            $table->integer('metacritic_score')->nullable();
             
             // Datos Estructurados (JSON)
             $table->json('localized_data')->nullable(); 

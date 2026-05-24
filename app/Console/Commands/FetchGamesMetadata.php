@@ -55,6 +55,11 @@ class FetchGamesMetadata extends Command
                         if (empty($game->summary) && isset($steamData['short_description'])) {
                             $game->summary = strip_tags($steamData['short_description']);
                         }
+
+                        // 🚀 GUARDAR NOTA DE METACRITIC (Si Steam la tiene)
+                        if (isset($steamData['metacritic']['score'])) {
+                            $game->metacritic_score = $steamData['metacritic']['score'];
+                        }
                         
                         // Aquí puedes añadir en el futuro la lógica para guardar géneros, capturas, etc.
                         // 📸 GUARDAR CAPTURAS DE STEAM (Opción B: El Reemplazo)

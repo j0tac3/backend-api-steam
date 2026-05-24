@@ -529,16 +529,22 @@ class GameController extends Controller
                 'slug' => Str::slug($steamName) . '-steam-' . $steamId
             ];
 
-            // 🧠 COMPLEMENTO IGDB: Si IGDB lo encontró, enriquecemos los datos base (Sinopsis, Fecha oficial, etc.)
+            // 🧠 COMPLEMENTO IGDB: Si IGDB lo encontró, enriquecemos los datos base
             $raw = null;
             if ($igdbId) {
                 $igdbDetails = $this->igdbService->getGameDetails($igdbId);
                 if (!empty($igdbDetails)) {
                     $raw = $igdbDetails[0];
-                    $gameData['slug'] = Str::slug($raw['name']) . '-' . $raw['id']; // Preferimos el slug oficial relacional
+                    $gameData['slug'] = Str::slug($raw['name']) . '-' . $raw['id'];
                     $gameData['name'] = $raw['name'];
                     $gameData['summary'] = isset($raw['summary']) ? $this->translator->translateToSpanish($raw['summary']) : null;
                     $gameData['release_date'] = isset($raw['first_release_date']) ? date('Y-m-d', $raw['first_release_date']) : null;
+                    
+                    // 🚀 FIX: RESCATAMOS LAS NOTAS DE IGDB
+                    // 'aggregated_rating' es la nota de la prensa (críticos)
+                    $gameData['rating'] = $raw['aggregated_rating'] ?? null; 
+                    // 'rating' a secas es la nota media de los usuarios de IGDB
+                    $gameData['igdb_user_rating'] = $raw['rating'] ?? null; 
                 }
             }
 
@@ -626,6 +632,29 @@ class GameController extends Controller
                 // 🚀 Guardamos TODOS los géneros de golpe en la tabla pivote (1 sola consulta a la BD)
                 if (count($genreIds) > 0) {
                     $localGame->genres()->syncWithoutDetaching($genreIds);
+                }
+            }
+            // 🕹️ PLATAFORMAS DE IGDB (Para que el juego no se quede solo en PC)
+            if (isset($raw['platforms']) && is_array($raw['platforms'])) {
+                $platformIds = [];
+                foreach ($raw['platforms'] as $p) {
+                    if (isset($p['name'])) {
+                        $family = $this->normalizeFamilyName($p['name']);
+                        $platform = Platform::firstOrCreate(
+                            ['slug' => Str::slug($p['name'])],
+                            [
+                                'igdb_id' => $p['id'] ?? null,
+                                'name'    => $p['name'],
+                                'family'  => $family
+                            ]
+                        );
+                        $platformIds[] = $platform->id;
+                    }
+                }
+                
+                // Vinculamos todas las plataformas extra (Switch, PS5, Xbox...) al juego global
+                if (count($platformIds) > 0) {
+                    $localGame->platforms()->syncWithoutDetaching($platformIds);
                 }
             }
         }

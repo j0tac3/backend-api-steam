@@ -14,7 +14,7 @@ class Game extends Model
 
     protected $fillable = [
         'parent_id', 'category', 'name', 'slug', 'summary',
-        'release_date', 'rating', 'localized_data', 'supported_languages', 'igdb_user_rating',
+        'release_date', 'rating', 'localized_data', 'supported_languages', 'igdb_user_rating','metacritic_score',
     ];
 
     protected function casts(): array
