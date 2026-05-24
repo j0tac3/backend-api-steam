@@ -459,6 +459,13 @@ class GameController extends Controller
             'steam_id' => 'required|string'
         ]);
 
+        // 🚀 EL ANCLAJE: Guardamos el steam_id en la cuenta del usuario para siempre
+        $user = $request->user();
+        if ($user->steam_id !== $validated['steam_id']) {
+            $user->steam_id = $validated['steam_id'];
+            $user->save(); // Se guarda de forma relacional estricta en tu BBDD
+        }
+
         // Traemos la librería con nombres (include_appinfo = true en el servicio)
         $steamLibrary = $this->igdbService->getSteamLibrary($validated['steam_id']);
         

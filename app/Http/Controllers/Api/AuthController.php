@@ -111,4 +111,21 @@ class AuthController extends Controller
             'user' => $user->fresh()
         ]);
     }
+
+    /**
+     * Desvincula la cuenta de Steam del usuario actual
+     */
+    public function unlinkSteam(Request $request)
+    {
+        $user = $request->user();
+        
+        if (!$user->steam_id) {
+            return response()->json(['message' => 'No hay ninguna cuenta de Steam vinculada'], 400);
+        }
+
+        $user->steam_id = null;
+        $user->save();
+
+        return response()->json(['message' => 'Cuenta de Steam desvinculada correctamente']);
+    }
 }

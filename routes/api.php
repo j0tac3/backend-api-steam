@@ -88,6 +88,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Limpiador visual de portadas (Se ejecuta todos los días a las 03:00 AM)
     Schedule::command('games:clean-covers')->dailyAt('03:00')->withoutOverlapping();
 
+    Route::post('/user/unlink-steam', [GameController::class, 'unlinkSteam']);
     // Logout
     Route::post('/logout', [AuthController::class, 'logout']);
 });

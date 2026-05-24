@@ -27,6 +27,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'settings' => 'array',
             'is_public' => 'boolean',
+            'steam_id',
         ];
     }
 

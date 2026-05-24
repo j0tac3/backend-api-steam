@@ -17,6 +17,13 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+
+            $table->string('username')->unique()->nullable()->index();
+            $table->boolean('is_public')->default(false);
+            $table->string('steam_id')->nullable()->unique();
+            $table->json('settings')->nullable();
+
+
             $table->rememberToken();
             $table->timestamps();
         });
