@@ -877,4 +877,18 @@ class GameController extends Controller
             'achievements' => $mappedAchievements->sortByDesc('unlocked')->values() 
         ]);
     }
+
+    public function getUserPlatforms(Request $request)
+    {
+        $userId = auth()->id();
+
+        $platforms = DB::table('user_games') // 🚀 AQUÍ PONES TU TABLA REAL
+            ->join('platforms', 'user_games.platform_id', '=', 'platforms.id')
+            ->where('user_games.user_id', $userId)
+            ->select('platforms.id', 'platforms.name')
+            ->distinct()
+            ->get();
+
+        return response()->json($platforms);
+    }
 }

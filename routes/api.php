@@ -78,6 +78,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/journal/{id}', [JournalEntryController::class, 'update']);
     Route::delete('/journal/{id}', [JournalEntryController::class, 'destroy']);
 
+    Route::get('/user/platforms', [GameController::class, 'getUserPlatforms']);
+
     // Rutas de Juegos
     Route::get('/games/{id}/achievements', [GameController::class, 'getAchievements']);
 
